@@ -1,0 +1,4 @@
+shifts:
+  - name: daily-checkin
+    cron: "0 9 * * *"
+    # No prompt — uses the default clock-in protocol
