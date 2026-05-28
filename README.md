@@ -50,22 +50,19 @@ When the harness wakes the agent up at 9 AM, it doesn't need to be told what to 
 
 ---
 
-## The "Going to Work" Model
+## The "Always On Duty" Model
 
-We call each scheduled agent invocation a **shift**. The shift follows a **clock-in protocol**:
+The harness is a long-running process — like an office that never closes. It watches each agent's inbox for new tasks and fires scheduled jobs via cron. When work appears, PI is spawned to handle it. When PI finishes, the harness checks if there's more work. The agent is effectively always available.
 
 ```
-1. Read AGENTS.md     → remember who you are and what you're responsible for
-2. Read memory/       → recall what happened in previous shifts
-3. Check inbox/       → see if anyone sent you new work
-4. Do your work       → based on responsibilities + inbox + judgment
-5. Before clocking out:
-   - Results → outbox/
-   - Update memory/
-   - Processed inbox → inbox/.processed/
+New task in inbox/ → harness detects it → spawns PI → PI reads AGENTS.md,
+processes tasks, moves completed to .processed/ → PI exits → harness
+re-checks inbox/ → more tasks? spawn PI again → empty? wait for next task
 ```
 
-This protocol turns a one-off PI invocation into a **continuous work session with persistent context**. The agent isn't stateless anymore — it knows what it did yesterday, what it's waiting on, and what's on its plate.
+The harness doesn't inject any protocol. PI reads AGENTS.md automatically from the working directory — all workflow instructions (check inbox, update memory, move to .processed/) are written there. The harness just sets `cwd` and says "you have new tasks."
+
+Session continuity comes from PI's `--session-dir` and `--continue` flags. The agent remembers what it did in previous invocations without any external state management.
 
 ---
 
@@ -74,8 +71,8 @@ This protocol turns a one-off PI invocation into a **continuous work session wit
 ```
 agents/researcher/
 ├── AGENTS.md          # Who you are, what you're responsible for
-├── schedule.yaml      # When you work (cron expressions)
 ├── inbox/             # Work others send you
+│   └── .processed/    # Completed tasks
 ├── outbox/            # Results you produce
 ├── memory/            # What you remember across shifts
 ├── eval/              # How your quality is measured and improved
@@ -121,7 +118,7 @@ Creating an agent isn't a single step. It's a lifecycle:
 1. Design       → Write AGENTS.md, choose skills and tools
 2. Evaluate     → Run test scenarios, measure quality
 3. Iterate      → Adjust role, skills, tools, harness based on eval results
-4. Deploy       → Add schedule.yaml, let the agent go to work
+4. Deploy       → Add schedule entries in team.yaml, let the agent go to work
 5. Monitor      → Ongoing eval, continuous improvement
 ```
 
@@ -196,23 +193,22 @@ To swap an implementation:
 2. Update AGENTS.md: "check Notion for new tasks" instead of "check inbox/"
 3. Done. The file-based directory isn't needed anymore.
 
-The clock-in protocol doesn't change. The harness doesn't change. Only the agent's instructions change — because the agent is the one with the intelligence to adapt.
+The harness doesn't change. Only the agent's instructions change — because the agent is the one with the intelligence to adapt.
 
 ---
 
 ## The Harness Is Dumb
 
-The harness — the thing that actually runs agents on schedule — is intentionally minimal. It does exactly three things:
+The harness — the long-running process that keeps agents working — is intentionally minimal. It does exactly two things:
 
-1. Scans agent directories for `schedule.yaml`
-2. Registers cron jobs
-3. When a cron fires: invokes PI with `cwd` set to the agent's directory, injecting the clock-in prompt
+1. Watches each agent's `inbox/` for new tasks — when one appears and the agent is idle, spawns PI
+2. Reads schedule config from team.yaml and fires PI when cron expressions match
 
-It doesn't understand what agents do. It doesn't manage state. It doesn't route messages. It's a glorified cron daemon that knows how to call PI.
+It doesn't understand what agents do. It doesn't manage state. It doesn't route messages. It doesn't inject prompts beyond "you have new tasks" or "execute scheduled task X."
 
 **Intelligence lives in the agents, not the infrastructure.**
 
-This means the harness is ~300 lines of code. It means you could replace it with system cron and a shell script. It means the convention works even if the harness doesn't exist — you can manually `cd agents/researcher && pi -p "start your shift"` and everything works.
+This means the harness is a few hundred lines of code. It means the convention works even without it — you can manually `cd agents/researcher && pi -p "you have new tasks"` and everything works.
 
 ---
 
@@ -228,9 +224,10 @@ agents/assistant/
 That's it. One file. No schedule (trigger manually), no memory (stateless), no inbox (no collaboration). It's a fully valid agent.
 
 Then, as needs emerge:
-- Want automation? Add `schedule.yaml`
+- Want to receive tasks? Add `inbox/`
+- Want recurring tasks? Add schedule entries in team.yaml
 - Want continuity? Add `memory/`
-- Want collaboration? Add `inbox/` and `outbox/`
+- Want to share results? Add `outbox/`
 - Want quality assurance? Add `eval/`
 - Want specialized abilities? Add `skills/`
 - Want external tools? Add `mcp.json`
@@ -249,16 +246,20 @@ mkdir -p my-team/agents
 echo "name: my-team" > my-team/team.yaml
 
 # Create your first agent
-mkdir -p my-team/agents/researcher
+mkdir -p my-team/agents/researcher/inbox
 cat > my-team/agents/researcher/AGENTS.md << 'EOF'
 # Researcher
 
 ## Role
 You are the team's technical researcher.
 
+## Task Processing
+- On startup, check inbox/ for pending tasks (ignore .processed/)
+- Each top-level entry in inbox/ is one task — process them in order
+- After completing a task, move it to inbox/.processed/
+
 ## Responsibilities
 - Investigate technologies and produce analysis reports
-- Check inbox/ for research requests from team members
 - Put findings in outbox/
 
 ## Working Style
@@ -269,12 +270,20 @@ You are the team's technical researcher.
 AI/ML, developer tools, cloud infrastructure
 EOF
 
-# Run a shift manually
+# Send a task
+echo "Research the Flue Framework — focus on performance and production readiness." \
+  > my-team/agents/researcher/inbox/1748422200_research-flue.md
+
+# Run manually (or let the harness do it)
 cd my-team/agents/researcher
-pi -p "You are starting a work shift. Read AGENTS.md for your role. Check if there's anything in inbox/ or memory/. Do your work, update memory/, put results in outbox/."
+pi -p "you have new tasks"
+
+# Or start the harness to run all agents continuously
+cd my-team/
+pi-team
 ```
 
-For automated scheduling, see the [Convention](./CONVENTION.md) for `schedule.yaml` format.
+For the full convention, see [CONVENTION.md](./CONVENTION.md).
 
 ---
 
@@ -283,11 +292,17 @@ For automated scheduling, see the [Convention](./CONVENTION.md) for `schedule.ya
 ```
 ├── CONVENTION.md          # The full convention specification
 ├── README.md              # This file — the ideas behind the project
+├── src/                   # The harness — runtime that makes teams work
+│   ├── index.ts           # Entry point: scan agents, start watchers + crons
+│   ├── watcher.ts         # Per-agent inbox/ file watching
+│   ├── cron.ts            # Schedule config from team.yaml, cron registration
+│   ├── invoke.ts          # Spawn pi subprocess
+│   ├── config.ts          # Read team.yaml
+│   └── types.ts           # Type definitions
 └── templates/
     ├── team.yaml          # Template for team config
     ├── agent/             # Template for a new agent directory
     │   ├── AGENTS.md
-    │   ├── schedule.yaml
     │   ├── inbox/
     │   ├── outbox/
     │   ├── workspace/

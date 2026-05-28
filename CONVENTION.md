@@ -4,7 +4,7 @@
 
 **A directory is an agent.**
 
-Everything an agent needs to be autonomous — identity, responsibilities, skills, tools, memory, schedule, and workspace — lives in a single directory. The harness's only job is to wake the agent up on schedule and point PI at that directory.
+Everything an agent needs to be autonomous — identity, responsibilities, skills, tools, memory, and workspace — lives in a single directory. The harness's only job is to ensure that whenever an agent has work in its inbox, PI is running to process it.
 
 This convention defines the minimal structure for a team of role-driven PI agents. It intentionally leaves out collaboration protocols, task management, and orchestration — those are concerns the user can layer on top, just as a real company chooses its own project management tools after hiring employees.
 
@@ -18,7 +18,8 @@ my-team/
 ├── shared/                  # Resources available to all agents
 │   ├── skills/              # Shared skills
 │   ├── plugins/             # Shared plugins
-│   └── knowledge/           # Shared reference material
+│   ├── knowledge/           # Shared reference material
+│   └── workspace/           # Shared workspace for agent collaboration
 └── agents/
     ├── researcher/          # Each subdirectory = one agent
     ├── coder/
@@ -27,7 +28,7 @@ my-team/
 
 ### team.yaml
 
-Minimal team-level configuration. Agents inherit these defaults but can override them.
+Team-level configuration. The harness reads this file on startup.
 
 ```yaml
 name: my-team
@@ -39,9 +40,33 @@ defaults:
 # Shared MCP servers available to all agents
 shared_mcp:
   - ./shared/mcp.json
+
+# Per-agent scheduling (harness concern)
+agents:
+  researcher:
+    schedule:
+      - name: daily-checkin
+        cron: "0 9 * * *"
+      - name: ceo-report
+        cron: "30 8 * * 1"
+        prompt: "generate the CEO weekly report using workspace/ceo-report-template/"
 ```
 
 Only `name` is required. Everything else is optional.
+
+### Scheduling
+
+Scheduling is a **harness concern**, not an agent concern. Agents don't know or care when they're woken up — they just process whatever work is in front of them. The harness reads `agents.<name>.schedule` from team.yaml and fires PI at the right time.
+
+Each schedule entry has:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Human-readable identifier |
+| `cron` | Yes | Standard 5-field cron expression |
+| `prompt` | No | What to tell PI. Defaults to `"start your shift"`. Can reference files in the agent's directory for complex tasks. |
+
+If a scheduled task needs complex content (templates, attachments, data files), place those files in the agent's `workspace/` and reference the path in the prompt.
 
 ---
 
@@ -50,9 +75,8 @@ Only `name` is required. Everything else is optional.
 ```
 agents/<name>/
 ├── AGENTS.md            # Identity & responsibilities (required)
-├── schedule.yaml        # When to work (optional — no schedule = on-demand only)
-├── inbox/               # Incoming messages/tasks from others
-│   └── .processed/      # Processed inbox items are moved here
+├── inbox/               # Incoming tasks
+│   └── .processed/      # Completed tasks are moved here
 ├── outbox/              # Produced results for others to consume
 ├── workspace/           # Working files, drafts, intermediate state
 ├── memory/              # Persistent memory across shifts
@@ -71,8 +95,7 @@ agents/<name>/
 | Path | Required | Purpose |
 |------|----------|---------|
 | `AGENTS.md` | **Yes** | The agent's identity. Without this, it's not an agent. |
-| `schedule.yaml` | No | Without it, the agent only runs when manually triggered. |
-| `inbox/` | No | Create it when the agent needs to receive work from others. |
+| `inbox/` | No | Create it when the agent needs to receive work. The harness watches this directory. |
 | `outbox/` | No | Create it when the agent produces results for others. |
 | `workspace/` | No | Create it when the agent needs scratch space. |
 | `memory/` | No | Create it when the agent needs to remember across shifts. |
@@ -117,10 +140,14 @@ You are the team's technical researcher. You investigate technologies,
 analyze trends, and provide informed recommendations to the team.
 
 ## Responsibilities
-- Check inbox/ daily for research requests from team members
-- Produce a weekly industry digest every Monday → outbox/weekly-digest/
+- Process research requests from inbox/
 - When you discover critical information, write an alert → outbox/alerts/
 - Maintain ongoing research threads in memory/context.md
+
+## Task Processing
+- On startup, check inbox/ for pending tasks (ignore .processed/)
+- Each top-level entry in inbox/ is one task — process them in order
+- After completing a task, move it to inbox/.processed/
 
 ## Working Style
 - Always cite sources with links
@@ -140,85 +167,50 @@ This is the difference between "an agent that executes tasks" and "an agent that
 
 ---
 
-## schedule.yaml — When To Work
+## The Harness — Making Teams Run
 
-```yaml
-shifts:
-  - name: daily-checkin
-    cron: "0 9 * * *"
-    # No prompt — uses the default clock-in protocol
+The harness is a long-running process — the minimal infrastructure that keeps agents working. Without it, the convention is just directories. With it, agents respond to tasks and run on schedule.
 
-  - name: weekly-digest
-    cron: "0 9 * * 1"
-    prompt: "It's Monday. Produce this week's industry digest."
+### What the Harness Does
 
-  - name: inbox-check
-    cron: "0 */4 * * *"
-    prompt: "Quick check — process any new inbox items only."
+The harness does exactly two things:
+
+1. **Watch inbox/** — when new tasks appear and the agent is idle, spawn PI to process them
+2. **Fire crons** — read schedule config from team.yaml, spawn PI when cron expressions match
+
+That's it. The harness doesn't understand task content, doesn't manage agent state, and doesn't touch agent directories beyond setting `cwd`. Intelligence lives in the agents (via AGENTS.md), not the infrastructure.
+
+### How PI Is Invoked
+
+All invocations follow the same pattern:
+
+```bash
+pi --session-dir <agent-dir>/.session --continue -p "<prompt>" --cwd <agent-dir>/
 ```
 
-### Fields
+- `--session-dir` + `--continue` maintain conversation history across invocations (PI handles compaction internally)
+- `--cwd` points PI at the agent's directory, where PI discovers AGENTS.md, skills/, plugins/, and mcp.json automatically
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Human-readable identifier for the shift |
-| `cron` | Yes | Standard 5-field cron expression |
-| `prompt` | No | Override the default clock-in prompt. When omitted, the harness uses the full clock-in protocol. |
-| `enabled` | No | `true` by default. Set `false` to pause a shift. |
-| `once` | No | `true` for one-time runs. ISO 8601 datetime in `cron` field instead of cron expression. |
-| `type` | No | `work` (default) or `eval`. Eval shifts run in an isolated environment using test scenarios. See [eval/](#eval--agent-quality). |
+**Two types of invocation:**
 
-### Eval Shifts
+| Trigger | Prompt | Concurrency |
+|---------|--------|-------------|
+| New inbox task | `"you have new tasks"` | Per-agent serial — one PI at a time, re-check inbox after exit |
+| Cron fires | Custom prompt from team.yaml, or `"start your shift"` | Independent — can run alongside inbox processing |
 
-```yaml
-shifts:
-  - name: eval-research-request
-    type: eval
-    scenario: eval/scenarios/handle-research-request.md
-    enabled: false  # Typically triggered manually or by an HR agent
-```
-
-When the harness encounters `type: eval`, it:
-1. Creates a temporary copy of the agent's directory (isolated environment)
-2. Applies the scenario's setup (pre-populated inbox, memory state, etc.)
-3. Runs the shift using the scenario's prompt
-4. Collects the agent's output into `eval/results/`
-5. Does **not** write to the real outbox/ or memory/ — this is a dry run
-
-### One-Time Tasks
-
-```yaml
-shifts:
-  - name: initial-setup
-    once: true
-    cron: "2026-05-28T09:00:00Z"
-    prompt: "Set up your workspace and introduce yourself to the team."
-    enabled: true
-```
-
----
-
-## The Clock-In Protocol
-
-When the harness wakes an agent (either on schedule or manually), it invokes PI with the agent's directory as `cwd` and injects the **clock-in prompt**:
+### Inbox Processing Loop
 
 ```
-You are starting a work shift.
-
-1. Read your AGENTS.md to understand your role and responsibilities.
-2. Read memory/ to recall context from previous shifts.
-3. Check inbox/ for new messages or requests.
-4. Do your work according to your responsibilities and any inbox items.
-5. Before finishing:
-   - Put results in outbox/ with descriptive filenames
-   - Update memory/log.md with what you did this shift
-   - Update memory/context.md with any ongoing context
-   - Move processed inbox items to inbox/.processed/
+inbox/ has unprocessed items + agent is idle
+  → spawn pi -p "you have new tasks"
+  → pi reads AGENTS.md, checks inbox/, processes tasks, moves done items to .processed/
+  → pi exits
+  → harness re-checks inbox/
+  → still items remaining? → spawn pi again
+  → inbox empty? → wait for next file change
 ```
 
-When a shift has a custom `prompt`, it replaces step 4 only. Steps 1-3 and 5 always run.
-
-**Why a protocol instead of just a prompt?** Because the protocol ensures the agent always grounds itself (reads AGENTS.md), recalls context (reads memory/), checks for new work (reads inbox/), and persists state (writes memory/). This is what makes it a "shift" instead of a one-off invocation.
+The harness guarantees: **if inbox/ has unprocessed tasks, PI will be running.** There is never a state where tasks exist but no PI is processing them.
 
 ### How PI Loads Agent Configuration
 
@@ -234,37 +226,48 @@ The convention doesn't require any special PI integration. It works because it a
 
 ## inbox/ — Receiving Work
 
-Files placed here by humans or other agents. The agent checks this directory on each shift.
+The inbox is the universal task queue. Every task — whether from a human, another agent, or a CLI command — enters as a file or directory in inbox/.
 
-### File Naming Convention
+### Task Format
+
+Each **top-level entry** in inbox/ is one task. A task can be any type:
 
 ```
-inbox/YYYY-MM-DD_<from>_<subject>.md
+inbox/
+  1748422200_research-ai-trends.md          # Plain text task
+  1748422500_review-logo.png                # Single file task
+  1748423100_analyze-quarterly-data/         # Compound task (directory)
+    task.md
+    Q4-report.xlsx
+    charts/
+      revenue.png
 ```
 
-Examples:
-```
-inbox/2026-05-27_human_research-flue-framework.md
-inbox/2026-05-27_coder_need-api-review.md
-```
+**Rules:**
+- Naming convention: `{timestamp}_{slug}` — timestamp determines processing order, slug is human-readable
+- Type is unrestricted — `.md`, `.png`, `.pdf`, a directory with arbitrary content
+- For compound tasks (directories), the internal structure is up to the sender — no enforced layout
+- The agent is intelligent enough to read any entry and determine what to do
 
 ### Processing
 
-- Agent reads the file, does the work
-- Moves processed file to `inbox/.processed/`
+- Agent reads each top-level entry, does the work
+- Moves completed tasks to `inbox/.processed/`
 - If the work produces output, puts it in `outbox/`
 
-### Sending to Another Agent
+### Sending Tasks
 
-To send work to the `coder` agent from the `researcher` agent:
+Anyone can write to an agent's inbox:
 
 ```bash
-# The harness or a human simply writes a file:
-echo "Please review the API design in outbox/api-design.md" \
-  > ../coder/inbox/2026-05-27_researcher_review-api.md
-```
+# Human via CLI (future)
+pi-team send researcher "Research the Flue Framework"
 
-Or PI does it naturally during a shift: "Write a message to the coder asking them to review..."
+# Another agent during its shift — writes directly or via shared/workspace/
+echo "Please review the API design" > ../coder/inbox/1748422200_researcher_review-api.md
+
+# Or agent collaboration through shared/workspace/ (preferred for complex coordination)
+```
 
 ---
 
@@ -326,7 +329,7 @@ How agents maintain continuity across shifts.
 
 ### Memory Is Agent-Written
 
-The harness never writes to memory/. The agent itself decides what to remember. The clock-in protocol tells it to read memory/ at the start and update it at the end, but the content and structure are up to the agent.
+The harness never writes to memory/. The agent itself decides what to remember. AGENTS.md should instruct the agent to read memory/ at the start and update it at the end, but the content and structure are up to the agent.
 
 ---
 
@@ -433,7 +436,7 @@ This requires no special infrastructure. The HR agent reads and writes the same 
 agents/
 ├── hr/                    # The HR agent — itself just an agent
 │   ├── AGENTS.md          # "You are responsible for agent quality..."
-│   ├── schedule.yaml
+│   ├── inbox/
 │   └── memory/
 ├── researcher/            # An agent the HR agent created and refined
 │   ├── AGENTS.md          # ← written/iterated by HR agent
@@ -483,30 +486,35 @@ name: my-team
 ## Role
 General-purpose assistant. You help with whatever is needed.
 
+## Task Processing
+- Check inbox/ for pending tasks (ignore .processed/)
+- Process each task, then move it to inbox/.processed/
+- Put results in outbox/
+
 ## Responsibilities
-- Check inbox/ for requests
-- Complete requests and put results in outbox/
+- Complete requests promptly and accurately
+- Ask for clarification via outbox/ when a task is ambiguous
 ```
 
-That's it. No schedule (manual trigger only), no memory, no skills. Add complexity only when needed.
+That's it. No memory, no skills, no scheduled tasks. Add complexity only when needed.
 
 ---
 
 ## Design Principles
 
-1. **A directory is an agent.** No database, no registry. If the directory exists under `agents/`, it's an agent.
+1. **A directory is an agent.** No database, no registry. If the directory exists under `agents/` with an AGENTS.md, it's an agent.
 
-2. **Role-driven, not task-driven.** AGENTS.md defines responsibilities, not one-off instructions. The agent decides what to do on each shift.
+2. **Role-driven, not task-driven.** AGENTS.md defines responsibilities, not one-off instructions. The agent decides what to do based on its role, its inbox, and its judgment.
 
 3. **File system is the API.** Inbox, outbox, memory — all just files. No message bus, no protocol, no serialization format. PI already knows how to read and write files.
 
-4. **PI-native.** The convention aligns with how PI already works — AGENTS.md, skills/, plugins/, MCP. No special integration needed.
+4. **PI-native.** The convention aligns with how PI already works — AGENTS.md, skills/, plugins/, MCP. No special integration needed. PI reads AGENTS.md automatically from the working directory; the harness just sets `cwd`.
 
-5. **Additive complexity.** Start with just AGENTS.md. Add schedule when you want automation. Add memory when you want continuity. Add inbox/outbox when you want collaboration. Add eval when you want quality assurance. Nothing is required upfront.
+5. **Additive complexity.** Start with just AGENTS.md. Add inbox when you want to receive tasks. Add memory when you want continuity. Add outbox when you want to produce results. Add eval when you want quality assurance. Add schedule entries in team.yaml when you want cron-triggered work. Nothing is required upfront.
 
-6. **The harness is dumb.** It reads schedule.yaml, invokes PI at the right time, in the right directory. It doesn't understand agents, tasks, or collaboration. Intelligence lives in the agents, not the infrastructure.
+6. **The harness is dumb.** It watches inbox/ for new files and fires crons from team.yaml. It doesn't understand agents, tasks, or collaboration. Intelligence lives in the agents, not the infrastructure.
 
-7. **Everything is replaceable.** The file-based directories (inbox/, outbox/, memory/, eval/) are zero-dependency defaults, not mandates. They represent *concepts* — receiving work, producing results, persisting context, measuring quality — not implementations. Users can replace any of them with external tools (Notion, Linear, a memory MCP server, Braintrust, etc.) by installing the appropriate MCP/plugin and updating the agent's AGENTS.md. The clock-in protocol doesn't change; only the agent's instructions about *where* to check change.
+7. **Everything is replaceable.** The file-based directories (inbox/, outbox/, memory/, eval/) are zero-dependency defaults, not mandates. They represent *concepts* — receiving work, producing results, persisting context, measuring quality — not implementations. Users can replace any of them with external tools (Notion, Linear, a memory MCP server, Braintrust, etc.) by installing the appropriate MCP/plugin and updating the agent's AGENTS.md.
 
 8. **Quality is a lifecycle stage.** Creating an agent (writing AGENTS.md) is only the first step. Systematically evaluating, iterating, and improving agents is how teams go from "wrote a prompt" to "deployed a reliable worker." The convention provides eval primitives so this process has a home — but doesn't prescribe how to judge quality, because that's role-specific.
 

@@ -1,0 +1,21 @@
+{
+  "name": "pi-agent-team",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "pi-team": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "croner": "^9.0.0",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0"
+  }
+}
