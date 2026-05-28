@@ -78,6 +78,7 @@ agents/researcher/
 ├── inbox/             # Work others send you
 ├── outbox/            # Results you produce
 ├── memory/            # What you remember across shifts
+├── eval/              # How your quality is measured and improved
 ├── workspace/         # Your scratch space
 ├── skills/            # Your specialized abilities
 ├── plugins/           # Your extensions
@@ -104,6 +105,81 @@ Why? Because **the value is in the ideas, not the infrastructure.** A convention
 
 ---
 
+## The Recruitment Problem
+
+There's a blind spot in every agent team product today: **nobody systematically ensures individual agents are actually good at their jobs.**
+
+The typical workflow: write a prompt, add some plugins, deploy. If the agent underperforms, tweak the prompt. If it still doesn't work, give up on agent teams entirely. This is the equivalent of hiring someone off the street with no interview, no onboarding, no evaluation — and then blaming "hiring" when they fail.
+
+Real companies invest heavily in recruitment: job descriptions, interviews, trial periods, performance reviews, training. Agent teams need the same discipline, but adapted to what agents actually are.
+
+### The Agent Lifecycle
+
+Creating an agent isn't a single step. It's a lifecycle:
+
+```
+1. Design       → Write AGENTS.md, choose skills and tools
+2. Evaluate     → Run test scenarios, measure quality
+3. Iterate      → Adjust role, skills, tools, harness based on eval results
+4. Deploy       → Add schedule.yaml, let the agent go to work
+5. Monitor      → Ongoing eval, continuous improvement
+```
+
+Most agent teams jump from step 1 to step 4. Steps 2 and 3 — the "recruitment" phase — are where quality comes from.
+
+### What Makes an Agent "Qualified"?
+
+Research (Stanford/MIT Meta-Harness, 2026) shows that changing just the harness around a fixed model can produce a **6x performance gap**. Agent quality isn't just about the prompt — it's about the entire directory: the role definition, the skills, the tools, the memory strategy, the verification steps.
+
+This means "iterating on an agent" isn't just prompt engineering. It's adjusting the whole structure:
+
+| Layer | What to adjust | Effect |
+|-------|---------------|--------|
+| Role definition | AGENTS.md | How the agent understands its job |
+| Skills | skills/ | What specialized abilities it has |
+| Tools | mcp.json | What external capabilities it can use |
+| Memory strategy | memory/ structure | How it maintains context across shifts |
+| Harness configuration | Convention setup | How the scaffolding supports the agent |
+
+### Eval as a Primitive
+
+The convention includes `eval/` as an optional directory — on the same level as `memory/` or `inbox/`. It provides:
+
+- **Scenarios** (`eval/scenarios/*.md`) — test situations written in natural language
+- **Results** (`eval/results/*.md`) — evaluation outcomes
+- **Eval shifts** — isolated test runs that don't affect production state
+
+These are primitives, not a framework. They give the eval-iterate loop a place to live within the agent directory. What you use them for — manual review, automated testing, RL-based optimization — is up to you.
+
+### The HR Agent
+
+Here's where it gets interesting: because everything in this convention is files and directories, an agent can manage other agents. An "HR agent" is just a regular agent whose job is recruitment:
+
+```
+HR Agent's responsibilities:
+1. Create new agent directories from templates
+2. Write eval scenarios based on the role requirements
+3. Run eval shifts and analyze results
+4. Identify which layer needs improvement (role? skills? tools?)
+5. Make adjustments and re-evaluate
+6. Repeat until the agent meets quality standards
+```
+
+No special API. No meta-framework. The HR agent reads and writes the same files a human would. This is the power of primitive-level design — sophisticated behavior emerges from simple building blocks.
+
+### Automated Iteration Is Real
+
+This isn't just theory. In 2026, multiple research projects have demonstrated automated agent improvement:
+
+- **AutoAgent** — a meta-agent that autonomously improves other agents' prompts, tools, and orchestration. Hit #1 on SpreadsheetBench (96.5%) in a 24-hour automated run.
+- **Meta HyperAgents** (Meta) — agents that can modify their own improvement code. Left to self-improve, they independently evolved persistent memory, performance tracking, and verification pipelines.
+- **SkillRL** — automatic skill discovery and recursive skill-library evolution via reinforcement learning.
+- **Polar** (NVIDIA) — RL training of models within black-box harnesses, achieving significant gains across Codex, Claude Code, and PI.
+
+The eval primitives in this convention are designed to be consumed by these tools. Standard scenarios and results can feed into automated optimization — the convention provides the interface, external tools provide the intelligence.
+
+---
+
 ## Everything Is Replaceable
 
 The file-based defaults (inbox/, outbox/, memory/) are **concepts with a zero-dependency default implementation**, not mandates.
@@ -113,6 +189,7 @@ The file-based defaults (inbox/, outbox/, memory/) are **concepts with a zero-de
 | Memory | `memory/*.md` | Memory MCP server, vector database, Notion |
 | Inbox | `inbox/*.md` | Notion tasks, Linear issues, Slack, email |
 | Outbox | `outbox/*.md` | Notion pages, GitHub issues, API calls |
+| Eval | `eval/*.md` | Braintrust, LangSmith, programmatic test suites, RL pipelines |
 
 To swap an implementation:
 1. Give the agent the right MCP server or plugin
@@ -154,6 +231,7 @@ Then, as needs emerge:
 - Want automation? Add `schedule.yaml`
 - Want continuity? Add `memory/`
 - Want collaboration? Add `inbox/` and `outbox/`
+- Want quality assurance? Add `eval/`
 - Want specialized abilities? Add `skills/`
 - Want external tools? Add `mcp.json`
 
@@ -207,13 +285,16 @@ For automated scheduling, see the [Convention](./CONVENTION.md) for `schedule.ya
 ├── README.md              # This file — the ideas behind the project
 └── templates/
     ├── team.yaml          # Template for team config
-    └── agent/             # Template for a new agent directory
-        ├── AGENTS.md
-        ├── schedule.yaml
-        ├── inbox/
-        ├── outbox/
-        ├── workspace/
-        └── memory/
+    ├── agent/             # Template for a new agent directory
+    │   ├── AGENTS.md
+    │   ├── schedule.yaml
+    │   ├── inbox/
+    │   ├── outbox/
+    │   ├── workspace/
+    │   ├── memory/
+    │   └── eval/
+    └── hr-agent/          # Template for an HR agent (agent quality manager)
+        └── AGENTS.md
 ```
 
 ---
@@ -227,7 +308,7 @@ For automated scheduling, see the [Convention](./CONVENTION.md) for `schedule.ya
 
 ## What This Is
 
-A way of thinking about agent teams that mirrors how real teams work: hire good people (define clear roles), give them a workspace (a directory), let them show up to work (scheduled shifts), and trust them to figure out the rest.
+A way of thinking about agent teams that mirrors how real teams work: hire good people (design roles, evaluate, iterate until qualified), give them a workspace (a directory), let them show up to work (scheduled shifts), and trust them to figure out the rest.
 
 ---
 
