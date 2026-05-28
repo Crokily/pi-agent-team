@@ -1,13 +1,15 @@
 import { existsSync } from 'node:fs';
+import type { TeamEmitter } from './events.js';
 import { Cron } from 'croner';
 import { InvocationManager } from './invoke.js';
-import { logger } from './logger.js';
+import { errorMessage, logger } from './logger.js';
 import type { Agent, RegisteredCron, TeamConfig } from './types.js';
 
 export function registerScheduledTasks(
   agents: Agent[],
   config: TeamConfig,
   invocations: InvocationManager,
+  events: TeamEmitter,
 ): RegisteredCron[] {
   const tasks: RegisteredCron[] = [];
   const agentMap = new Map(agents.map((a) => [a.name, a]));
@@ -33,13 +35,13 @@ export function registerScheduledTasks(
             job.stop();
             return;
           }
-          logger.info(agent.name, `cron fired: ${entry.name}`);
+          events.emit('cron:fired', { agent: agent.name, task: entry.name });
           void invocations.enqueue({ agent, config, kind: 'scheduled', taskName: entry.name, prompt });
         });
         tasks.push({ key: `${agent.name}/${entry.name}`, stop: () => job.stop() });
         logger.info(agent.name, `registered cron ${entry.name}: ${entry.cron}`);
       } catch (err) {
-        logger.error(agent.name, `invalid cron for ${entry.name}: ${message(err)}`);
+        logger.error(agent.name, `invalid cron for ${entry.name}: ${errorMessage(err)}`);
       }
     }
   }
@@ -50,6 +52,3 @@ export function stopScheduledTasks(tasks: RegisteredCron[]): void {
   for (const task of tasks) task.stop();
 }
 
-function message(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}

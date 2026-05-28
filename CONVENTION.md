@@ -260,13 +260,15 @@ inbox/
 Anyone can write to an agent's inbox:
 
 ```bash
-# Human via CLI (future)
+# Human via CLI
 pi-team send researcher "Research the Flue Framework"
 
 # Another agent during its shift — writes directly or via shared/workspace/
 echo "Please review the API design" > ../coder/inbox/1748422200_researcher_review-api.md
 
-# Or agent collaboration through shared/workspace/ (preferred for complex coordination)
+# Programmatically (e.g. from a web dashboard)
+# import { startTeam } from 'pi-agent-team';
+# handle.sendTask('researcher', 'Research the Flue Framework');
 ```
 
 ---

@@ -1,80 +1,90 @@
 #!/usr/bin/env node
-import { existsSync } from 'node:fs';
-import { discoverAgents, readTeamConfig } from './config.js';
-import { registerScheduledTasks, stopScheduledTasks } from './cron.js';
-import { InvocationManager } from './invoke.js';
-import { logger } from './logger.js';
-import { InboxWatcher } from './watcher.js';
-import type { Agent, RegisteredCron, TeamConfig } from './types.js';
+import { startTeam } from './runtime.js';
+import { init, addAgent, sendTask, status } from './commands.js';
+import { errorMessage } from './logger.js';
 
-const rootDir = process.cwd();
-let config: TeamConfig;
-let invocations: InvocationManager;
-let agents: Agent[] = [];
-let watchers = new Map<string, InboxWatcher>();
-let scheduled: RegisteredCron[] = [];
-let reloading = false;
-let shuttingDown = false;
-const keepAlive = setInterval(() => {
-  if (!shuttingDown && agents.some((agent) => !existsSync(agent.dir))) void reload(false);
-}, 5000);
+const [cmd, ...args] = process.argv.slice(2);
+
 async function main(): Promise<void> {
-  config = readTeamConfig(rootDir);
-  invocations = new InvocationManager(config.maxConcurrentPi);
-  await reload(true);
-  process.on('SIGHUP', () => {
-    void reload(false).catch((err) => logger.error(`reload failed: ${message(err)}`));
-  });
-  for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => void shutdown(signal));
-}
-async function reload(initial: boolean): Promise<void> {
-  if (reloading || shuttingDown) return;
-  reloading = true;
-  try {
-    const nextConfig = readTeamConfig(rootDir);
-    const nextAgents = discoverAgents(rootDir);
-    const oldAgents = new Set(watchers.keys());
-    const oldTasks = new Set(scheduled.map((task) => task.key));
-    stopAll();
-    config = nextConfig;
-    invocations.setLimit(config.maxConcurrentPi);
-    agents = nextAgents;
-    watchers = new Map();
-    for (const agent of agents) {
-      const watcher = new InboxWatcher(agent, config, invocations);
-      watchers.set(agent.name, watcher);
-      watcher.start();
+  switch (cmd) {
+    case undefined:
+    case 'start': {
+      const handle = await startTeam(process.cwd());
+      process.on('SIGHUP', () => {
+        void handle.reload().catch((err) => console.error(`reload failed: ${errorMessage(err)}`));
+      });
+      for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+        process.on(signal, () => {
+          console.log(`received ${signal}, shutting down`);
+          void handle.stop().then(() => process.exit(0), () => process.exit(1));
+        });
+      }
+      break;
     }
-    scheduled = registerScheduledTasks(agents, config, invocations);
-
-    if (!initial) logDiff('agent', oldAgents, new Set(watchers.keys()));
-    if (!initial) logDiff('scheduled task', oldTasks, new Set(scheduled.map((task) => task.key)));
-    logger.info(`Team ${config.name}: ${agents.length} agents discovered, ${scheduled.length} scheduled tasks registered`);
-  } finally {
-    reloading = false;
+    case 'init': {
+      const result = init(args[0]);
+      console.log(`Initialized team in ${result.rootDir}`);
+      console.log(`  team.yaml created`);
+      console.log(`  agents/ ready`);
+      console.log(`\nNext: pi-team add <agent-name>`);
+      break;
+    }
+    case 'add': {
+      const result = addAgent(args[0]);
+      console.log(`Created agent: ${result.name}`);
+      console.log(`  ${result.dir}/`);
+      console.log(`\nNext: edit agents/${result.name}/AGENTS.md to define the role`);
+      break;
+    }
+    case 'send': {
+      const result = sendTask(args[0], args.slice(1).join(' '));
+      console.log(`Sent to ${result.agent}: ${result.filename}`);
+      break;
+    }
+    case 'status': {
+      const st = status();
+      console.log(`Team: ${st.name}`);
+      console.log(`Agents: ${st.agents.length}`);
+      if (st.agents.length === 0) {
+        console.log(`\nNo agents found. Run pi-team add <name> to create one.`);
+        break;
+      }
+      console.log();
+      for (const agent of st.agents) {
+        console.log(`  ${agent.name}`);
+        console.log(`    inbox: ${agent.pending} pending`);
+        for (const s of agent.schedules) {
+          console.log(`    cron:  ${s.name} (${s.cron})${s.prompt ? ` → "${s.prompt}"` : ''}`);
+        }
+      }
+      break;
+    }
+    default:
+      if (cmd === '--help' || cmd === '-h') {
+        printHelp();
+        break;
+      }
+      console.error(`Unknown command: ${cmd}\n`);
+      printHelp();
+      process.exit(1);
   }
 }
-function stopAll(): void {
-  for (const watcher of watchers.values()) watcher.stop();
-  stopScheduledTasks(scheduled);
+
+function printHelp(): void {
+  console.log(`Usage: pi-team [command]
+
+Commands:
+  start              Start the harness (default)
+  init [dir]         Initialize a new team
+  add <name>         Add a new agent
+  send <agent> <msg> Send a task to an agent's inbox
+  status             Show team overview
+
+Options:
+  -h, --help         Show this help`);
 }
-async function shutdown(signal: NodeJS.Signals): Promise<void> {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  logger.info(`received ${signal}, shutting down`);
-  clearInterval(keepAlive);
-  stopAll();
-  await invocations.shutdown();
-  process.exit(0);
-}
-function logDiff(label: string, before: Set<string>, after: Set<string>): void {
-  for (const item of after) if (!before.has(item)) logger.info(`added ${label}: ${item}`);
-  for (const item of before) if (!after.has(item)) logger.warn(`removed ${label}: ${item}`);
-}
-function message(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
+
 main().catch((err) => {
-  logger.error(message(err));
+  console.error(errorMessage(err));
   process.exit(1);
 });

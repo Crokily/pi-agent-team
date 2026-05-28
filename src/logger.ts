@@ -20,3 +20,7 @@ export const logger = {
   error: (agentOrMessage: string, message?: string) => log('ERROR', agentOrMessage, message),
   debug: (agentOrMessage: string, message?: string) => log('DEBUG', agentOrMessage, message),
 };
+
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}

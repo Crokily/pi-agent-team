@@ -2,6 +2,11 @@
   "name": "pi-agent-team",
   "version": "0.1.0",
   "type": "module",
+  "exports": {
+    ".": "./dist/runtime.js",
+    "./commands": "./dist/commands.js",
+    "./types": "./dist/types.js"
+  },
   "bin": {
     "pi-team": "./dist/index.js"
   },

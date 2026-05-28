@@ -238,14 +238,20 @@ Nothing is required upfront. Complexity is earned, not imposed.
 
 ## Getting Started
 
+### With the CLI
+
 ```bash
-# Create a team
-mkdir -p my-team/agents
+pi-team init my-team
+cd my-team
+pi-team add researcher        # creates directory + template AGENTS.md
+# edit agents/researcher/AGENTS.md to define the role
+pi-team send researcher "Research the Flue Framework"
+pi-team start                 # start the harness — watches inboxes + fires crons
+```
 
-# Create team config
-echo "name: my-team" > my-team/team.yaml
+### By hand (the convention is just directories)
 
-# Create your first agent
+```bash
 mkdir -p my-team/agents/researcher/inbox
 cat > my-team/agents/researcher/AGENTS.md << 'EOF'
 # Researcher
@@ -270,17 +276,14 @@ You are the team's technical researcher.
 AI/ML, developer tools, cloud infrastructure
 EOF
 
-# Send a task
+echo "name: my-team" > my-team/team.yaml
+
 echo "Research the Flue Framework — focus on performance and production readiness." \
   > my-team/agents/researcher/inbox/1748422200_research-flue.md
 
 # Run manually (or let the harness do it)
 cd my-team/agents/researcher
 pi -p "you have new tasks"
-
-# Or start the harness to run all agents continuously
-cd my-team/
-pi-team
 ```
 
 For the full convention, see [CONVENTION.md](./CONVENTION.md).
@@ -292,31 +295,42 @@ For the full convention, see [CONVENTION.md](./CONVENTION.md).
 ```
 ├── CONVENTION.md          # The full convention specification
 ├── README.md              # This file — the ideas behind the project
+├── skill/                 # PI skill for managing teams from inside PI
+│   └── SKILL.md
 ├── src/                   # The harness — runtime that makes teams work
-│   ├── index.ts           # Entry point: scan agents, start watchers + crons
+│   ├── index.ts           # CLI entry point (pi-team command)
+│   ├── runtime.ts         # Team engine: startTeam() → TeamHandle
+│   ├── commands.ts        # Operations: init, add, send, status (returns data)
+│   ├── events.ts          # Typed event emitter for runtime observability
 │   ├── watcher.ts         # Per-agent inbox/ file watching
-│   ├── cron.ts            # Schedule config from team.yaml, cron registration
-│   ├── invoke.ts          # Spawn pi subprocess
-│   ├── config.ts          # Read team.yaml
-│   └── types.ts           # Type definitions
+│   ├── cron.ts            # Cron scheduling from team.yaml
+│   ├── invoke.ts          # Spawn pi subprocess with concurrency control
+│   ├── config.ts          # Read team.yaml + discover agents
+│   ├── logger.ts          # Console logger (subscribes to runtime events)
+│   └── types.ts           # All types, event map, operation results
 └── templates/
     ├── team.yaml          # Template for team config
     ├── agent/             # Template for a new agent directory
-    │   ├── AGENTS.md
-    │   ├── inbox/
-    │   ├── outbox/
-    │   ├── workspace/
-    │   ├── memory/
-    │   └── eval/
     └── hr-agent/          # Template for an HR agent (agent quality manager)
-        └── AGENTS.md
+```
+
+The harness is designed for multiple control surfaces. The CLI (`pi-team`) is one; a website, Notion console, or PI skill can use the same operations layer:
+
+```ts
+// Programmatic usage — e.g. from a web dashboard
+import { startTeam } from 'pi-agent-team';
+import { init, addAgent } from 'pi-agent-team/commands';
+
+const handle = await startTeam('/path/to/team');
+handle.sendTask('researcher', 'investigate Flue Framework');
+handle.events.on('invocation:end', (e) => { /* push to dashboard */ });
 ```
 
 ---
 
 ## What This Is Not
 
-- **Not a framework.** No `npm install`, no API, no SDK. It's a convention.
+- **Not a framework.** The convention is just directories and ideas. The harness (`pi-team`) provides a CLI and programmatic API, but the convention works without it.
 - **Not a product.** No hosted service, no pricing page. It's an idea with templates.
 - **Not opinionated about tools.** Use Notion, Linear, Slack, custom MCPs — the convention doesn't care.
 - **Not locked to PI.** The ideas apply to any agent that can read files and follow instructions. PI is the natural fit because of its directory-based configuration, but the convention is agent-runtime-agnostic.

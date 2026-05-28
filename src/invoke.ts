@@ -1,23 +1,36 @@
 import { execSync, spawn, type ChildProcess } from 'node:child_process';
 import { createWriteStream, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve as pathResolve } from 'node:path';
+import type { TeamEmitter } from './events.js';
 import { logger } from './logger.js';
 import type { InvocationRequest, InvocationResult } from './types.js';
+
 interface QueuedRequest extends InvocationRequest {
   resolve: (result: InvocationResult) => void;
 }
+
 const tailLimit = 4000;
-let nextId = 1;
+
 export class InvocationManager {
   private active = new Map<number, ChildProcess>();
+  private activeByAgent = new Map<string, Set<number>>();
+  private nextId = 1;
   private queue: QueuedRequest[] = [];
   private waiters: Array<() => void> = [];
   private stopping = false;
-  constructor(private limit: number) {}
+
+  constructor(private limit: number, private events: TeamEmitter) {}
+
   setLimit(limit: number): void {
     this.limit = limit;
     this.drain();
   }
+
+  isRunning(agentName: string): boolean {
+    const ids = this.activeByAgent.get(agentName);
+    return ids !== undefined && ids.size > 0;
+  }
+
   enqueue(request: InvocationRequest): Promise<InvocationResult> {
     return new Promise((resolve) => {
       if (this.stopping) {
@@ -31,6 +44,7 @@ export class InvocationManager {
       this.drain();
     });
   }
+
   async shutdown(): Promise<void> {
     this.stopping = true;
     for (const request of this.queue.splice(0)) {
@@ -51,13 +65,15 @@ export class InvocationManager {
     clearTimeout(forceTimer);
     if (this.active.size > 0) this.active.forEach((proc) => killProcess(proc, 'SIGKILL'));
   }
+
   private drain(): void {
     while (!this.stopping && this.active.size < this.limit && this.queue.length > 0) {
       this.start(this.queue.shift()!);
     }
   }
+
   private start(request: QueuedRequest): void {
-    const id = nextId++;
+    const id = this.nextId++;
     const { agent, config } = request;
     mkdirSync(agent.sessionDir, { recursive: true });
     mkdirSync(agent.logsDir, { recursive: true });
@@ -69,14 +85,17 @@ export class InvocationManager {
     const logPath = join(agent.logsDir, `${logStamp()}-${request.kind}-${id}.log`);
     const logStream = createWriteStream(logPath, { flags: 'a' });
     const { bin, args: spawnArgs } = resolvePiSpawn(config.piBin, args);
-    logger.info(agent.name, `starting ${request.kind} pi #${id}`);
+    this.events.emit('invocation:start', { agent: agent.name, kind: request.kind, id });
     logStream.write(`[${new Date().toISOString()}] ${bin} ${spawnArgs.join(' ')}\n\n`);
+
     const proc = spawn(bin, spawnArgs, {
       cwd: agent.dir,
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     this.active.set(id, proc);
+    this.trackAgent(agent.name, id);
+
     let stdout = '';
     let stderr = '';
     let settled = false;
@@ -89,33 +108,48 @@ export class InvocationManager {
       stderr = cap(stderr, chunk);
       logStream.write(chunk);
     });
+
     const finish = (code: number | null, signal: NodeJS.Signals | null, err?: Error) => {
       if (settled) return;
       settled = true;
       if (err) stderr = cap(stderr, Buffer.from(err.message));
       logStream.end(`\n[${new Date().toISOString()}] exit code=${code} signal=${signal}\n`);
       this.active.delete(id);
+      this.untrackAgent(agent.name, id);
 
       const ok = !err && code === 0;
-      const exitText = signal ? `signal ${signal}` : `code ${code}`;
-      if (ok) logger.info(agent.name, `${request.kind} pi #${id} exited with ${exitText}`);
-      else logger.warn(agent.name, `${request.kind} pi #${id} exited with ${exitText}`);
+      this.events.emit('invocation:end', { agent: agent.name, kind: request.kind, id, ok, code, signal });
       request.resolve({ ok, code, signal, stdout, stderr });
       this.notifyWaiters();
       this.drain();
     };
+
     proc.on('error', (err) => finish(null, null, err));
     proc.on('close', (code, signal) => finish(code, signal));
   }
+
+  private trackAgent(name: string, id: number): void {
+    let ids = this.activeByAgent.get(name);
+    if (!ids) { ids = new Set(); this.activeByAgent.set(name, ids); }
+    ids.add(id);
+  }
+
+  private untrackAgent(name: string, id: number): void {
+    const ids = this.activeByAgent.get(name);
+    if (ids) { ids.delete(id); if (ids.size === 0) this.activeByAgent.delete(name); }
+  }
+
   private waitForEmpty(): Promise<void> {
     if (this.active.size === 0) return Promise.resolve();
     return new Promise((resolve) => this.waiters.push(resolve));
   }
+
   private notifyWaiters(): void {
     if (this.active.size > 0) return;
     for (const resolve of this.waiters.splice(0)) resolve();
   }
 }
+
 function resolvePiSpawn(piBin: string, args: string[]): { bin: string; args: string[] } {
   if (process.platform !== 'win32') return { bin: piBin, args };
   try {
@@ -134,20 +168,25 @@ function resolvePiSpawn(piBin: string, args: string[]): { bin: string; args: str
   }
   return { bin: piBin, args };
 }
+
 function cap(current: string, chunk: Buffer): string {
   return (current + chunk.toString('utf8')).slice(-tailLimit);
 }
+
 function cancelledResult(stderr: string): InvocationResult {
   return { ok: false, code: null, signal: null, stdout: '', stderr };
 }
+
 function killProcess(proc: ChildProcess, signal: NodeJS.Signals): void {
   if (proc.killed) return;
   if (process.platform === 'win32') proc.kill();
   else proc.kill(signal);
 }
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
 function logStamp(): string {
   return new Date().toISOString().replace(/[:.]/g, '-');
 }

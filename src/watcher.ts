@@ -1,6 +1,7 @@
 import { existsSync, watch, type FSWatcher } from 'node:fs';
 import { readdir } from 'node:fs/promises';
-import { logger } from './logger.js';
+import type { TeamEmitter } from './events.js';
+import { errorMessage, logger } from './logger.js';
 import { InvocationManager } from './invoke.js';
 import type { Agent, TeamConfig } from './types.js';
 const debounceMs = 250;
@@ -13,7 +14,14 @@ export class InboxWatcher {
   private checking = false;
   private stopped = false;
 
-  constructor(private agent: Agent, private config: TeamConfig, private invocations: InvocationManager) {}
+  constructor(
+    private agent: Agent,
+    private config: TeamConfig,
+    private invocations: InvocationManager,
+    private events: TeamEmitter,
+  ) {}
+
+  isBusy(): boolean { return this.busy; }
   start(): void {
     if (!existsSync(this.agent.inboxDir)) {
       logger.warn(this.agent.name, 'inbox missing; watcher not started');
@@ -35,15 +43,15 @@ export class InboxWatcher {
       this.watcher = watch(this.agent.inboxDir, (_event, filename) => {
         if (this.stopped) return;
         const name = typeof filename === 'string' ? filename : '';
-        if (name === '.processed') return;
+        if (name.startsWith('.')) return;
         this.scheduleCheck();
       });
       this.watcher.on('error', (err) => {
-        if (!this.stopped) logger.warn(this.agent.name, `fs.watch failed: ${message(err)}`);
+        if (!this.stopped) logger.warn(this.agent.name, `fs.watch failed: ${errorMessage(err)}`);
       });
     } catch (err) {
       if (!this.stopped) {
-        logger.warn(this.agent.name, `fs.watch unavailable; polling inbox (${message(err)})`);
+        logger.warn(this.agent.name, `fs.watch unavailable; polling inbox (${errorMessage(err)})`);
       }
     }
   }
@@ -63,30 +71,33 @@ export class InboxWatcher {
         return;
       }
       hasItems = await this.hasInboxItems();
-      if (hasItems) this.busy = true;
+      if (hasItems) {
+        this.busy = true;
+        this.events.emit('task:received', { agent: this.agent.name });
+      }
     } finally {
       this.checking = false;
     }
     if (!hasItems) return;
-    await this.invocations.enqueue({ agent: this.agent, config: this.config, kind: 'inbox', prompt: 'you have new tasks' });
-    this.busy = false;
+    try {
+      await this.invocations.enqueue({ agent: this.agent, config: this.config, kind: 'inbox', prompt: 'you have new tasks' });
+    } finally {
+      this.busy = false;
+    }
     setTimeout(() => void this.check(), 0);
   }
   private async hasInboxItems(): Promise<boolean> {
     try {
       const entries = await readdir(this.agent.inboxDir, { withFileTypes: true });
-      return entries.some((entry) => entry.name !== '.processed' && entry.name !== '.gitkeep');
+      return entries.some((entry) => !entry.name.startsWith('.'));
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
         logger.warn(this.agent.name, 'inbox removed; stopping inbox watcher');
         this.stop();
       } else {
-        logger.error(this.agent.name, `failed to read inbox: ${message(err)}`);
+        logger.error(this.agent.name, `failed to read inbox: ${errorMessage(err)}`);
       }
       return false;
     }
   }
-}
-function message(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
