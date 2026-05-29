@@ -16,37 +16,40 @@ This project extracts that idea into a standalone convention — no Discord, no 
 
 ---
 
-## The Problem with Current Agent Teams
+## What Everyone Else Builds: a Smart Orchestrator
 
-Every multi-agent product in 2026 — Claude Code Agent Teams, CrewAI, AutoGen, AgentManager — follows the same pattern:
+By 2026, "a team of AI agents" is a crowded field, not a thesis — and it's worth being honest about that field before claiming to do something different.
 
-```
-Human creates task → assigns to agent → agent executes → returns result
-```
+The dominant open-source shape is the **orchestrator**: a lead agent or control-plane that takes one goal, breaks it into tasks, and routes them across workers it spawns. [ClawTeam](https://github.com/HKUDS/ClawTeam) spawns workers into git worktrees and tmux panes; [Orloj](https://github.com/OrlojHQ/orloj) compiles declarative YAML into agent graphs with leased tasks; [OpenRig](https://github.com/mvschwarz/openrig) wires pods of agents with `delegates_to` edges; [agent-teams-ai](https://github.com/777genius/agent-teams-ai) has a "team lead" auto-fill a kanban board. A close cousin is the **auto-assembled role roster**, where a concierge interviews you and stands up a PM, some engineers, and a QA who report to a coordinator ([MASON](https://github.com/Mason-Teams/mason-teams), [Muster](https://github.com/sandhuka/muster-ai), [Collo](https://github.com/plusai-solutions/ai-scrum-master-template)).
 
-This is **task-driven**. It works, but it misses something fundamental about how real teams operate.
+The idea of an agent as a **persistent employee with standing duties** isn't new either. Lindy sells "AI employees," Cursor runs agents on cron jobs and git events, ChatGPT has scheduled Tasks, and [Artificial](https://github.com/AndreBaltazar8/artificial) even boots a "CEO" agent that hires and fires its own workers. "Show up and do your job without being asked" is a real, well-populated category — we're not inventing it.
 
-In a real company, employees don't wait for someone to hand them a task for every action they take. They have **ongoing responsibilities**. They show up to work, check what needs attention, make judgment calls, and get things done. The manager doesn't micromanage every action — they hire good people, define their roles clearly, and trust them to figure out the day-to-day.
+What nearly all of these share is a **smart center**: a lead, a graph, a control-plane that plans, assigns, routes, and reconciles. The agents are the muscle; the coordinator is the brain.
 
-Current agent teams simulate a task queue. We want to simulate a **workplace**.
+pi-agent-team makes the opposite bet.
 
 ---
 
-## Role-Driven, Not Task-Driven
+## The Opposite Bet: No Orchestrator
 
-The core design decision: agents have **roles**, not just **tasks**.
+There is no lead agent here. No task graph, no router, no control-plane deciding who does what. The harness only wakes agents up; everything else lives **inside each agent**.
 
-| | Task-Driven (current tools) | Role-Driven (this convention) |
+That doesn't mean tasks disappear — they still arrive as files in an agent's `inbox/`, so in the small this convention *is* a task queue like any other. What's deliberately missing is the layer *above* the agents: nobody decomposes a goal and hands out the pieces. Each agent owns a **domain** and decides for itself what the day needs.
+
+This mirrors how real teams actually work. Employees don't wait for someone to hand them a task for every action. They have ongoing responsibilities: they show up, check what needs attention, make judgment calls, and get things done. A good manager doesn't micromanage — they hire well, define roles clearly, and trust people with the day-to-day. The intelligence is distributed across the people, not concentrated in a dispatcher.
+
+| | Coordinator-driven (most 2026 tools) | This convention |
 |---|---|---|
-| Trigger | Human assigns a specific task | Agent "goes to work" on schedule |
-| Instructions | "Do X" | "You are responsible for X, Y, Z" |
-| Initiative | None — waits for input | Checks its domain, decides what to do |
-| Memory | Stateless per invocation | Remembers across shifts |
-| Metaphor | A function call | An employee |
+| Where the intelligence lives | A lead agent / graph / control-plane | Each agent, in its AGENTS.md |
+| How an agent starts | The coordinator spawns it for a sub-task | A schedule fires, or a file lands in its inbox |
+| Lifespan | Spawned per goal, then gone | A persistent role-holder, across shifts |
+| Coordination | The coordinator routes and reconciles | Plain files — inbox / outbox / memory |
+| Infrastructure | Orchestrator, task graph, queues | A directory and a cron line |
+| Metaphor | A build pipeline | An employee |
 
-An agent's AGENTS.md doesn't say "you can do research." It says "you **are** the researcher. Your job is to check for research requests daily, produce a weekly digest on Mondays, and alert the team when you find something critical."
+An agent's AGENTS.md doesn't say "you can do research." It says "you **are** the researcher — check for research requests daily, produce a digest on Mondays, and flag anything critical to the team." When the harness wakes it at 9 AM, it isn't told what to do. It reads its responsibilities, checks its memory, looks at its inbox, and gets to work.
 
-When the harness wakes the agent up at 9 AM, it doesn't need to be told what to do. It reads its responsibilities, checks its memory for context, looks at its inbox for new requests, and gets to work.
+That's the difference between an agent that *executes tasks* and one that *holds a position*.
 
 ---
 
