@@ -36,7 +36,15 @@ There is no lead agent here. No task graph, no router, no control-plane deciding
 
 That doesn't mean tasks disappear — they still arrive as files in an agent's `inbox/`, so in the small this convention *is* a task queue like any other. What's deliberately missing is the layer *above* the agents: nobody decomposes a goal and hands out the pieces. Each agent owns a **domain** and decides for itself what the day needs.
 
-This mirrors how real teams actually work. Employees don't wait for someone to hand them a task for every action. They have ongoing responsibilities: they show up, check what needs attention, make judgment calls, and get things done. A good manager doesn't micromanage — they hire well, define roles clearly, and trust people with the day-to-day. The intelligence is distributed across the people, not concentrated in a dispatcher.
+So the obvious question: why throw away the orchestrator, when a smart lead is exactly the part everyone else is building? Because that's the wrong place to put the intelligence.
+
+- **It has to be smart about everything.** To route work well, an orchestrator must model every agent's domain — a god-object that understands the whole team. It's the hardest piece to write and the first to break.
+- **It's a single point of failure for judgment.** One bad decomposition or routing decision degrades the entire team. A harness that makes no decisions can make no bad ones.
+- **It freezes intelligence in code while the models keep improving.** Hand-written orchestration logic bakes in today's assumptions, and every model upgrade has to squeeze through that fixed bottleneck. Push the intelligence into the agents — the model plus its directory — and a better model makes every agent better at once, with nothing in the middle gating it.
+- **It couples the whole team to the center.** Adding, removing, or reworking an agent means editing the orchestrator. Here, `mkdir` hires a teammate and `rm` lets one go — nothing central to touch, and different agents can even run on different runtimes.
+- **The leverage isn't in the dispatcher anyway.** What makes an agent good is its own role, skills, tools, and memory — its directory. That's the whole premise of [The Recruitment Problem](#the-recruitment-problem) below: the scaffolding around a fixed model dominates its quality. So invest intelligence *there*, one agent at a time, instead of concentrating it in a planner that sits above them all.
+
+The result is a team that's never merely as good as its orchestrator — because there isn't one. It's as good as its agents, and each one improves on its own.
 
 | | Coordinator-driven (most 2026 tools) | This convention |
 |---|---|---|
