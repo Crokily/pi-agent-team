@@ -34,12 +34,8 @@ Team-level configuration. The harness reads this file on startup.
 name: my-team
 
 defaults:
-  model: claude-sonnet-4-6
+  model: anthropic/claude-sonnet-4-6
   thinking: medium
-
-# Shared MCP servers available to all agents
-shared_mcp:
-  - ./shared/mcp.json
 
 # Per-agent scheduling (harness concern)
 agents:
@@ -185,18 +181,19 @@ That's it. The harness doesn't understand task content, doesn't manage agent sta
 All invocations follow the same pattern:
 
 ```bash
-pi --session-dir <agent-dir>/.session --continue -p "<prompt>" --cwd <agent-dir>/
+pi --session-dir <agent-dir>/.session --continue --model <model> --thinking <level> -p "<prompt>"
 ```
 
 - `--session-dir` + `--continue` maintain conversation history across invocations (PI handles compaction internally)
-- `--cwd` points PI at the agent's directory, where PI discovers AGENTS.md, skills/, plugins/, and mcp.json automatically
+- `--model` and `--thinking` are set from team.yaml defaults (or per-agent overrides)
+- The harness sets the working directory to the agent's directory via the Node.js `spawn({ cwd })` option — PI then discovers AGENTS.md, skills/, plugins/, and mcp.json automatically from that directory
 
 **Two types of invocation:**
 
 | Trigger | Prompt | Concurrency |
 |---------|--------|-------------|
 | New inbox task | `"you have new tasks"` | Per-agent serial — one PI at a time, re-check inbox after exit |
-| Cron fires | Custom prompt from team.yaml, or `"start your shift"` | Independent — can run alongside inbox processing |
+| Cron fires | Custom prompt from team.yaml, or `"start your shift"` | Per-agent serial — queued if the agent already has an active PI |
 
 ### Inbox Processing Loop
 

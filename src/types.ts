@@ -56,7 +56,7 @@ export interface SendTaskResult {
 export interface AgentStatus {
   name: string;
   pending: number;
-  busy: boolean;
+  busy?: boolean;
   schedules: ScheduleEntry[];
 }
 

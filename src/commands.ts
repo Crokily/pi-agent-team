@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,7 +42,7 @@ export function sendTask(agentName: string, message: string, rootDir = process.c
   }
   const ts = Date.now();
   const slug = message.slice(0, 40).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'task';
-  const filename = `${ts}_${slug}.md`;
+  const filename = `${ts}_${slug}_${randomBytes(2).toString('hex')}.md`;
   const path = join(inboxDir, filename);
   writeFileSync(path, message + '\n');
   return { agent: agentName, filename, path };
@@ -55,7 +56,6 @@ export function status(rootDir = process.cwd()): TeamStatus {
     agents: agents.map((agent) => ({
       name: agent.name,
       pending: countInbox(agent.inboxDir),
-      busy: false,
       schedules: config.agentSchedules.get(agent.name) ?? [],
     })),
   };

@@ -13,6 +13,8 @@ export class InboxWatcher {
   private busy = false;
   private checking = false;
   private stopped = false;
+  private failCount = 0;
+  private stalled = false;
 
   constructor(
     private agent: Agent,
@@ -57,11 +59,12 @@ export class InboxWatcher {
   }
   private scheduleCheck(): void {
     if (this.stopped || this.busy) return;
+    this.stalled = false;
     if (this.debounce) clearTimeout(this.debounce);
     this.debounce = setTimeout(() => void this.check(), debounceMs);
   }
   private async check(): Promise<void> {
-    if (this.stopped || this.busy || this.checking) return;
+    if (this.stopped || this.busy || this.checking || this.stalled) return;
     this.checking = true;
     let hasItems = false;
     try {
@@ -79,12 +82,27 @@ export class InboxWatcher {
       this.checking = false;
     }
     if (!hasItems) return;
+    if (this.stopped) { this.busy = false; return; }
     try {
-      await this.invocations.enqueue({ agent: this.agent, config: this.config, kind: 'inbox', prompt: 'you have new tasks' });
-    } finally {
+      const result = await this.invocations.enqueue({ agent: this.agent, config: this.config, kind: 'inbox', prompt: 'you have new tasks' });
+      if (result.ok) {
+        this.failCount = 0;
+        this.busy = false;
+        setTimeout(() => void this.check(), 0);
+      } else {
+        this.failCount++;
+        this.busy = false;
+        if (this.failCount >= 5) {
+          this.stalled = true;
+          this.events.emit('error', { agent: this.agent.name, message: `inbox stalled after ${this.failCount} consecutive failures` });
+        } else {
+          const delay = Math.min(this.failCount * this.failCount * 1000, 60_000);
+          setTimeout(() => void this.check(), delay);
+        }
+      }
+    } catch {
       this.busy = false;
     }
-    setTimeout(() => void this.check(), 0);
   }
   private async hasInboxItems(): Promise<boolean> {
     try {

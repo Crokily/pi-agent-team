@@ -1,6 +1,7 @@
 {
   "name": "pi-agent-team",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": "./dist/runtime.js",
@@ -11,16 +12,27 @@
     "pi-team": "./dist/index.js"
   },
   "scripts": {
+    "prepare": "npm run build",
     "build": "tsc",
+    "test": "node --import tsx/esm --test test/*.test.ts",
     "start": "node dist/index.js",
     "dev": "tsc --watch"
   },
+  "files": [
+    "dist",
+    "templates",
+    "skill",
+    "README.md",
+    "CONVENTION.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "croner": "^9.0.0",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "tsx": "^4.22.3",
     "typescript": "^5.8.0"
   }
 }

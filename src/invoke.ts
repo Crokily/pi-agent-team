@@ -68,7 +68,9 @@ export class InvocationManager {
 
   private drain(): void {
     while (!this.stopping && this.active.size < this.limit && this.queue.length > 0) {
-      this.start(this.queue.shift()!);
+      const idx = this.queue.findIndex((r) => !this.isRunning(r.agent.name));
+      if (idx === -1) break;
+      this.start(this.queue.splice(idx, 1)[0]);
     }
   }
 
@@ -179,8 +181,8 @@ function cancelledResult(stderr: string): InvocationResult {
 
 function killProcess(proc: ChildProcess, signal: NodeJS.Signals): void {
   if (proc.killed) return;
-  if (process.platform === 'win32') proc.kill();
-  else proc.kill(signal);
+  if (process.platform === 'win32') { proc.kill(); return; }
+  try { process.kill(-proc.pid!, signal); } catch { proc.kill(signal); }
 }
 
 function delay(ms: number): Promise<void> {

@@ -1,0 +1,11 @@
+name: starter-team
+
+defaults:
+  model: anthropic/claude-sonnet-4-6
+  thinking: medium
+
+agents:
+  researcher:
+    schedule:
+      - name: daily-checkin
+        cron: "0 9 * * *"

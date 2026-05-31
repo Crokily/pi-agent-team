@@ -247,6 +247,27 @@ Nothing is required upfront. Complexity is earned, not imposed.
 
 ---
 
+## Install
+
+### Prerequisites
+
+- **Node.js 22+**
+- **The [pi](https://github.com/crokily/pi) CLI**, installed and configured with an API key
+
+### Install from source
+
+```bash
+git clone https://github.com/crokily/pi-agent-team.git
+cd pi-agent-team
+npm install
+npm run build
+npm link          # makes the pi-team command available globally
+```
+
+pi-team is not yet published to npm.
+
+---
+
 ## Getting Started
 
 ### With the CLI
