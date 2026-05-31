@@ -20,7 +20,7 @@ This project extracts that idea into a standalone convention. No Discord, no dat
 
 By 2026, "a team of AI agents" is a crowded field, not a thesis. Worth being honest about that before claiming to do something different.
 
-The dominant open-source shape is the orchestrator: a lead agent or control-plane that takes one goal, breaks it into tasks, and routes them across workers it spawns. [ClawTeam](https://github.com/HKUDS/ClawTeam) spawns workers into git worktrees and tmux panes. [Orloj](https://github.com/OrlojHQ/orloj) compiles declarative YAML into agent graphs with leased tasks. [OpenRig](https://github.com/mvschwarz/openrig) wires pods of agents with `delegates_to` edges. [agent-teams-ai](https://github.com/777genius/agent-teams-ai) has a "team lead" auto-fill a kanban board. A close cousin is the auto-assembled role roster, where a concierge interviews you and stands up a PM, some engineers, and a QA ([MASON](https://github.com/Mason-Teams/mason-teams), [Muster](https://github.com/sandhuka/muster-ai), [Collo](https://github.com/plusai-solutions/ai-scrum-master-template)).
+The dominant open-source shape is the orchestrator: a lead agent or control-plane that takes one goal, breaks it into tasks, and routes them across workers it spawns. [ClawTeam](https://github.com/HKUDS/ClawTeam) spawns workers into git worktrees and tmux panes. [Orloj](https://github.com/OrlojHQ/orloj) compiles declarative YAML into agent graphs with leased tasks. [OpenRig](https://github.com/mvschwarz/openrig) wires pods of agents with directed edges. [agent-teams-ai](https://github.com/777genius/agent-teams-ai) has a "team lead" auto-fill a kanban board. A close cousin is the auto-assembled role roster, where a concierge interviews you and stands up a PM, some engineers, and a QA ([MASON](https://github.com/Mason-Teams/mason-teams), [Muster](https://github.com/sandhuka/muster-ai), [Collo](https://github.com/plusai-solutions/ai-scrum-master-template)).
 
 The idea of an agent as a persistent employee with standing duties isn't new either. Lindy sells "AI employees," Cursor runs agents on cron jobs and git events, ChatGPT has scheduled Tasks, and [Artificial](https://github.com/AndreBaltazar8/artificial) boots a "CEO" agent that hires and fires its own workers. "Show up and do your job without being asked" is a real, well-populated category. We're not inventing it.
 
@@ -136,7 +136,7 @@ Most agent teams jump from step 1 to step 4. Steps 2 and 3, the "recruitment" ph
 
 ### What makes an agent "qualified"?
 
-Research (Stanford/MIT Meta-Harness, 2026) shows that changing just the scaffolding around a fixed model can produce a 6x performance gap. Agent quality isn't just about the prompt. It's about the entire directory: the role definition, the skills, the tools, the memory strategy, the verification steps.
+Research ([Stanford/MIT Meta-Harness, 2026](https://arxiv.org/abs/2605.24220)) shows that changing just the scaffolding around a fixed model can produce a 6x performance gap. Agent quality isn't just about the prompt. It's about the entire directory: the role definition, the skills, the tools, the memory strategy, the verification steps.
 
 This means "iterating on an agent" isn't just prompt engineering. It's adjusting the whole structure:
 
@@ -178,10 +178,10 @@ No special API. No meta-framework. The HR agent reads and writes the same files 
 
 This isn't just theory. In 2026, multiple research projects have demonstrated automated agent improvement:
 
-- AutoAgent: a meta-agent that autonomously improves other agents' prompts, tools, and orchestration. Hit #1 on SpreadsheetBench (96.5%) in a 24-hour automated run.
-- Meta HyperAgents (Meta): agents that can modify their own improvement code. Left to self-improve, they independently evolved persistent memory, performance tracking, and verification pipelines.
-- SkillRL: automatic skill discovery and recursive skill-library evolution via reinforcement learning.
-- Polar (NVIDIA): RL training of models within black-box harnesses, achieving significant gains across Codex, Claude Code, and PI.
+- [AutoAgent](https://x.com/kevingu/status/2039874388095651937): a meta-agent that autonomously improves other agents' prompts, tools, and orchestration. Hit #1 on SpreadsheetBench (96.5%) in a 24-hour automated run.
+- [Meta HyperAgents](https://huggingface.co/papers/2603.19461) (Meta): agents that can modify their own improvement code. Left to self-improve, they independently evolved persistent memory, performance tracking, and verification pipelines.
+- [SkillRL](https://arxiv.org/abs/2602.08234): automatic skill discovery and recursive skill-library evolution via reinforcement learning.
+- [Polar](https://github.com/NVIDIA-NeMo/ProRL-Agent-Server) (NVIDIA): RL training of models within black-box harnesses, achieving significant gains across Codex, Claude Code, and PI.
 
 The eval primitives in this convention are designed to be consumed by these tools. Standard scenarios and results can feed into automated optimization. The convention provides the interface, external tools provide the intelligence.
 
@@ -321,9 +321,16 @@ For the full convention, see [CONVENTION.md](./CONVENTION.md).
 
 ---
 
+## Architecture
+
+The project has three layers. The convention (pure spec) sits at the bottom. The operations layer (file manipulation) sits in the middle. Everything else is a consumer: control surfaces that let humans or agents interact with teams, and the autonomous runtime that adds self-running capability. No consumer is privileged. All interact through the same interface: the file system.
+
+Design principles, separation of concerns, and development guidelines are in [AGENTS.md](./AGENTS.md).
+
 ## Project structure
 
 ```
+├── AGENTS.md              # Design principles and development guidelines
 ├── CONVENTION.md          # The full convention specification
 ├── README.md              # This file, the ideas behind the project
 ├── skill/                 # PI skill for managing teams from inside PI
