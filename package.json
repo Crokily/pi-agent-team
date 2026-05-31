@@ -4,9 +4,11 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./dist/runtime.js",
+    ".": "./dist/commands.js",
     "./commands": "./dist/commands.js",
-    "./types": "./dist/types.js"
+    "./runtime": "./dist/runtime.js",
+    "./types": "./dist/types.js",
+    "./config": "./dist/config.js"
   },
   "bin": {
     "pi-team": "./dist/index.js"

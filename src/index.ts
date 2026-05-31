@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { startTeam } from './runtime.js';
 import { init, addAgent, sendTask, status } from './commands.js';
+import { readRuntimeConfig } from './config.js';
 import { errorMessage } from './logger.js';
 
 const [cmd, ...args] = process.argv.slice(2);
@@ -43,6 +44,7 @@ async function main(): Promise<void> {
     }
     case 'status': {
       const st = status();
+      const config = readRuntimeConfig(process.cwd());
       console.log(`Team: ${st.name}`);
       console.log(`Agents: ${st.agents.length}`);
       if (st.agents.length === 0) {
@@ -53,7 +55,7 @@ async function main(): Promise<void> {
       for (const agent of st.agents) {
         console.log(`  ${agent.name}`);
         console.log(`    inbox: ${agent.pending} pending`);
-        for (const s of agent.schedules) {
+        for (const s of config.agentSchedules.get(agent.name) ?? []) {
           console.log(`    cron:  ${s.name} (${s.cron})${s.prompt ? ` → "${s.prompt}"` : ''}`);
         }
       }
@@ -74,7 +76,7 @@ function printHelp(): void {
   console.log(`Usage: pi-team [command]
 
 Commands:
-  start              Start the harness (default)
+  start              Start the autonomous runtime (default)
   init [dir]         Initialize a new team
   add <name>         Add a new agent
   send <agent> <msg> Send a task to an agent's inbox

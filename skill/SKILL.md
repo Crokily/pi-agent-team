@@ -130,10 +130,10 @@ Every agent's AGENTS.md needs this section (adapt wording to the role):
 
 `{unix_timestamp}_{slug}.md` — e.g. `1748422200_research-flue.md`. Can be a file (simple text task) or directory (complex task with attachments, use `task.md` as entry point inside).
 
-## Harness
+## Autonomous Runtime
 
-The harness is a separate long-running process (`pi-team` or `pi-team start`) that:
+The autonomous runtime is a separate long-running process (`pi-team` or `pi-team start`) that:
 - Watches each agent's `inbox/` — spawns PI when a task appears
 - Fires cron jobs from `team.yaml` schedules
 
-This skill manages the **structure**. The harness **runs** it. They are independent — the team works without the harness (invoke agents manually with `cd agents/<name> && pi -p "you have new tasks"`).
+This skill manages the **structure**. The runtime **runs** it. They are independent — the team works without the runtime (invoke agents manually with `cd agents/<name> && pi -p "you have new tasks"`).

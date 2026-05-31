@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { discoverAgents, readTeamConfig } from './config.js';
+import { discoverTeam } from './config.js';
 import type { AddAgentResult, InitResult, SendTaskResult, TeamStatus } from './types.js';
 
 export function init(dir?: string): InitResult {
@@ -49,14 +49,12 @@ export function sendTask(agentName: string, message: string, rootDir = process.c
 }
 
 export function status(rootDir = process.cwd()): TeamStatus {
-  const config = readTeamConfig(rootDir);
-  const agents = discoverAgents(rootDir);
+  const team = discoverTeam(rootDir);
   return {
-    name: config.name,
-    agents: agents.map((agent) => ({
+    name: team.name,
+    agents: team.agents.map((agent) => ({
       name: agent.name,
-      pending: countInbox(agent.inboxDir),
-      schedules: config.agentSchedules.get(agent.name) ?? [],
+      pending: countInbox(join(agent.dir, 'inbox')),
     })),
   };
 }
