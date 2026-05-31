@@ -34,7 +34,7 @@ export class InvocationManager {
   enqueue(request: InvocationRequest): Promise<InvocationResult> {
     return new Promise((resolve) => {
       if (this.stopping) {
-        resolve(cancelledResult('harness is shutting down'));
+        resolve(cancelledResult('runtime is shutting down'));
         return;
       }
       this.queue.push({ ...request, resolve });
@@ -48,7 +48,7 @@ export class InvocationManager {
   async shutdown(): Promise<void> {
     this.stopping = true;
     for (const request of this.queue.splice(0)) {
-      request.resolve(cancelledResult('harness is shutting down'));
+      request.resolve(cancelledResult('runtime is shutting down'));
     }
     if (this.active.size === 0) return;
 

@@ -4,7 +4,7 @@
 
 **A directory is an agent.**
 
-Everything an agent needs to be autonomous — identity, responsibilities, skills, tools, memory, and workspace — lives in a single directory. The harness's only job is to ensure that whenever an agent has work in its inbox, PI is running to process it.
+Everything an agent needs to be autonomous — identity, responsibilities, skills, tools, memory, and workspace — lives in a single directory. The runtime's only job is to ensure that whenever an agent has work in its inbox, PI is running to process it.
 
 This convention defines the minimal structure for a team of role-driven PI agents. It intentionally leaves out collaboration protocols, task management, and orchestration — those are concerns the user can layer on top, just as a real company chooses its own project management tools after hiring employees.
 
@@ -28,7 +28,7 @@ my-team/
 
 ### team.yaml
 
-Team-level configuration. The harness reads this file on startup.
+Team-level configuration. The autonomous runtime reads this file on startup.
 
 ```yaml
 name: my-team
@@ -37,7 +37,7 @@ defaults:
   model: anthropic/claude-sonnet-4-6
   thinking: medium
 
-# Per-agent scheduling (harness concern)
+# Per-agent scheduling (runtime concern)
 agents:
   researcher:
     schedule:
@@ -52,7 +52,7 @@ Only `name` is required. Everything else is optional.
 
 ### Scheduling
 
-Scheduling is a **harness concern**, not an agent concern. Agents don't know or care when they're woken up — they just process whatever work is in front of them. The harness reads `agents.<name>.schedule` from team.yaml and fires PI at the right time.
+Scheduling is a **runtime concern**, not an agent concern. Agents don't know or care when they're woken up — they just process whatever work is in front of them. The autonomous runtime reads `agents.<name>.schedule` from team.yaml and fires PI at the right time.
 
 Each schedule entry has:
 
@@ -91,7 +91,7 @@ agents/<name>/
 | Path | Required | Purpose |
 |------|----------|---------|
 | `AGENTS.md` | **Yes** | The agent's identity. Without this, it's not an agent. |
-| `inbox/` | No | Create it when the agent needs to receive work. The harness watches this directory. |
+| `inbox/` | No | Create it when the agent needs to receive work. The autonomous runtime watches this directory. |
 | `outbox/` | No | Create it when the agent produces results for others. |
 | `workspace/` | No | Create it when the agent needs scratch space. |
 | `memory/` | No | Create it when the agent needs to remember across shifts. |
@@ -157,24 +157,24 @@ AI/ML frameworks, cloud infrastructure, developer tools
 
 ### Why Role-Driven?
 
-Task-driven agents need a human to say "do X." Role-driven agents know what X is because their AGENTS.md tells them their responsibilities. When the harness wakes them up, they check their responsibilities, look at their inbox and memory, and decide what to do.
+Task-driven agents need a human to say "do X." Role-driven agents know what X is because their AGENTS.md tells them their responsibilities. When the runtime wakes them up, they check their responsibilities, look at their inbox and memory, and decide what to do.
 
 This is the difference between "an agent that executes tasks" and "an agent that holds a position."
 
 ---
 
-## The Harness — Making Teams Run
+## The Autonomous Runtime — Making Teams Run
 
-The harness is a long-running process — the minimal infrastructure that keeps agents working. Without it, the convention is just directories. With it, agents respond to tasks and run on schedule.
+The autonomous runtime is a long-running process — the minimal infrastructure that keeps agents working. Without it, the convention is just directories. With it, agents respond to tasks and run on schedule.
 
-### What the Harness Does
+### What the Autonomous Runtime Does
 
-The harness does exactly two things:
+The autonomous runtime does exactly two things:
 
 1. **Watch inbox/** — when new tasks appear and the agent is idle, spawn PI to process them
 2. **Fire crons** — read schedule config from team.yaml, spawn PI when cron expressions match
 
-That's it. The harness doesn't understand task content, doesn't manage agent state, and doesn't touch agent directories beyond setting `cwd`. Intelligence lives in the agents (via AGENTS.md), not the infrastructure.
+That's it. The runtime doesn't understand task content, doesn't manage agent state, and doesn't touch agent directories beyond setting `cwd`. Intelligence lives in the agents (via AGENTS.md), not the infrastructure.
 
 ### How PI Is Invoked
 
@@ -186,7 +186,7 @@ pi --session-dir <agent-dir>/.session --continue --model <model> --thinking <lev
 
 - `--session-dir` + `--continue` maintain conversation history across invocations (PI handles compaction internally)
 - `--model` and `--thinking` are set from team.yaml defaults (or per-agent overrides)
-- The harness sets the working directory to the agent's directory via the Node.js `spawn({ cwd })` option — PI then discovers AGENTS.md, skills/, plugins/, and mcp.json automatically from that directory
+- The runtime sets the working directory to the agent's directory via the Node.js `spawn({ cwd })` option — PI then discovers AGENTS.md, skills/, plugins/, and mcp.json automatically from that directory
 
 **Two types of invocation:**
 
@@ -202,12 +202,12 @@ inbox/ has unprocessed items + agent is idle
   → spawn pi -p "you have new tasks"
   → pi reads AGENTS.md, checks inbox/, processes tasks, moves done items to .processed/
   → pi exits
-  → harness re-checks inbox/
+  → runtime re-checks inbox/
   → still items remaining? → spawn pi again
   → inbox empty? → wait for next file change
 ```
 
-The harness guarantees: **if inbox/ has unprocessed tasks, PI will be running.** There is never a state where tasks exist but no PI is processing them.
+The runtime guarantees: **if inbox/ has unprocessed tasks, PI will be running.** There is never a state where tasks exist but no PI is processing them.
 
 ### How PI Loads Agent Configuration
 
@@ -328,7 +328,7 @@ How agents maintain continuity across shifts.
 
 ### Memory Is Agent-Written
 
-The harness never writes to memory/. The agent itself decides what to remember. AGENTS.md should instruct the agent to read memory/ at the start and update it at the end, but the content and structure are up to the agent.
+The runtime never writes to memory/. The agent itself decides what to remember. AGENTS.md should instruct the agent to read memory/ at the start and update it at the end, but the content and structure are up to the agent.
 
 ---
 
@@ -417,7 +417,7 @@ Eval on its own is just measurement. The real value comes from the loop:
 5. Repeat
 ```
 
-This loop can be run manually by a human, or automated by an HR agent (see below). Each iteration adjusts the agent at whatever layer needs it — role definition, skills, tools, or harness configuration. The eval/ directory provides the fitness function; the agent directory provides the levers.
+This loop can be run manually by a human, or automated by an HR agent (see below). Each iteration adjusts the agent at whatever layer needs it — role definition, skills, tools, or runtime configuration. The eval/ directory provides the fitness function; the agent directory provides the levers.
 
 ### The HR Agent Pattern
 
@@ -507,11 +507,11 @@ That's it. No memory, no skills, no scheduled tasks. Add complexity only when ne
 
 3. **File system is the API.** Inbox, outbox, memory — all just files. No message bus, no protocol, no serialization format. PI already knows how to read and write files.
 
-4. **PI-native.** The convention aligns with how PI already works — AGENTS.md, skills/, plugins/, MCP. No special integration needed. PI reads AGENTS.md automatically from the working directory; the harness just sets `cwd`.
+4. **PI-native.** The convention aligns with how PI already works — AGENTS.md, skills/, plugins/, MCP. No special integration needed. PI reads AGENTS.md automatically from the working directory; the runtime just sets `cwd`.
 
 5. **Additive complexity.** Start with just AGENTS.md. Add inbox when you want to receive tasks. Add memory when you want continuity. Add outbox when you want to produce results. Add eval when you want quality assurance. Add schedule entries in team.yaml when you want cron-triggered work. Nothing is required upfront.
 
-6. **The harness is dumb.** It watches inbox/ for new files and fires crons from team.yaml. It doesn't understand agents, tasks, or collaboration. Intelligence lives in the agents, not the infrastructure.
+6. **The runtime is minimal.** It watches inbox/ for new files and fires crons from team.yaml. It doesn't understand agents, tasks, or collaboration. Intelligence lives in the agents, not the infrastructure.
 
 7. **Everything is replaceable.** The file-based directories (inbox/, outbox/, memory/, eval/) are zero-dependency defaults, not mandates. They represent *concepts* — receiving work, producing results, persisting context, measuring quality — not implementations. Users can replace any of them with external tools (Notion, Linear, a memory MCP server, Braintrust, etc.) by installing the appropriate MCP/plugin and updating the agent's AGENTS.md.
 

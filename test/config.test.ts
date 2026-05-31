@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { readTeamConfig, discoverAgents } from '../src/config.js';
+import { discoverAgents, discoverTeam, readRuntimeConfig } from '../src/config.js';
 
 let tmp: string;
 
@@ -15,8 +15,8 @@ afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-describe('readTeamConfig', () => {
-  it('parses valid team.yaml with name, defaults, agent schedules', () => {
+describe('readRuntimeConfig', () => {
+  it('parses valid team.yaml with defaults and agent schedules', () => {
     writeFileSync(join(tmp, 'team.yaml'), [
       'name: acme',
       'defaults:',
@@ -30,8 +30,7 @@ describe('readTeamConfig', () => {
       '        prompt: plan the day',
     ].join('\n'));
 
-    const cfg = readTeamConfig(tmp);
-    assert.equal(cfg.name, 'acme');
+    const cfg = readRuntimeConfig(tmp);
     assert.equal(cfg.defaults.model, 'anthropic/claude-sonnet-4-6');
     assert.equal(cfg.defaults.thinking, 'high');
     const sched = cfg.agentSchedules.get('planner');
@@ -43,26 +42,34 @@ describe('readTeamConfig', () => {
   });
 
   it('throws on missing team.yaml', () => {
-    assert.throws(() => readTeamConfig(tmp), /Missing team\.yaml/);
-  });
-
-  it('throws on missing name field', () => {
-    writeFileSync(join(tmp, 'team.yaml'), 'defaults:\n  model: x\n');
-    assert.throws(() => readTeamConfig(tmp), /must define a non-empty name/);
+    assert.throws(() => readRuntimeConfig(tmp), /Missing team\.yaml/);
   });
 
   it('handles missing defaults gracefully', () => {
     writeFileSync(join(tmp, 'team.yaml'), 'name: bare\n');
-    const cfg = readTeamConfig(tmp);
-    assert.equal(cfg.name, 'bare');
+    const cfg = readRuntimeConfig(tmp);
     assert.equal(cfg.defaults.model, undefined);
     assert.equal(cfg.defaults.thinking, undefined);
   });
 
-  it('ignores unknown keys silently', () => {
-    writeFileSync(join(tmp, 'team.yaml'), 'name: ok\nfoo: bar\nbaz: 42\n');
-    const cfg = readTeamConfig(tmp);
-    assert.equal(cfg.name, 'ok');
+});
+
+describe('discoverTeam', () => {
+  it('reads the team name and discovers convention agents', () => {
+    writeFileSync(join(tmp, 'team.yaml'), 'name: acme\n');
+    const agentsDir = join(tmp, 'agents');
+    mkdirSync(join(agentsDir, 'planner'), { recursive: true });
+    writeFileSync(join(agentsDir, 'planner', 'AGENTS.md'), '# planner');
+
+    const team = discoverTeam(tmp);
+    assert.equal(team.rootDir, tmp);
+    assert.equal(team.name, 'acme');
+    assert.deepEqual(team.agents.map((a) => a.name), ['planner']);
+  });
+
+  it('throws on missing name field', () => {
+    writeFileSync(join(tmp, 'team.yaml'), 'defaults:\n  model: x\n');
+    assert.throws(() => discoverTeam(tmp), /must define a non-empty name/);
   });
 });
 
@@ -79,7 +86,6 @@ describe('discoverAgents', () => {
     const names = agents.map((a) => a.name);
     assert.deepEqual(names, ['alpha', 'gamma']);
     assert.equal(agents[0].dir, join(agentsDir, 'alpha'));
-    assert.equal(agents[0].inboxDir, join(agentsDir, 'alpha', 'inbox'));
   });
 
   it('returns empty array when agents/ does not exist', () => {

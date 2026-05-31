@@ -3,7 +3,7 @@ import { readdir } from 'node:fs/promises';
 import type { TeamEmitter } from './events.js';
 import { errorMessage, logger } from './logger.js';
 import { InvocationManager } from './invoke.js';
-import type { Agent, TeamConfig } from './types.js';
+import type { RuntimeAgent, RuntimeConfig } from './types.js';
 const debounceMs = 250;
 const pollMs = 5000;
 export class InboxWatcher {
@@ -17,8 +17,8 @@ export class InboxWatcher {
   private stalled = false;
 
   constructor(
-    private agent: Agent,
-    private config: TeamConfig,
+    private agent: RuntimeAgent,
+    private config: RuntimeConfig,
     private invocations: InvocationManager,
     private events: TeamEmitter,
   ) {}

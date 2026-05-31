@@ -1,29 +1,41 @@
 import { existsSync } from 'node:fs';
-import { discoverAgents, readTeamConfig } from './config.js';
+import { join } from 'node:path';
+import { discoverTeam, readRuntimeConfig } from './config.js';
 import { sendTask as doSendTask, countInbox } from './commands.js';
 import { registerScheduledTasks, stopScheduledTasks } from './cron.js';
 import { TeamEmitter } from './events.js';
 import { InvocationManager } from './invoke.js';
 import { errorMessage, logger } from './logger.js';
 import { InboxWatcher } from './watcher.js';
-import type { Agent, AgentStatus, RegisteredCron, SendTaskResult, TeamConfig, TeamStatus } from './types.js';
+import type {
+  Agent,
+  RegisteredCron,
+  RuntimeAgent,
+  RuntimeAgentStatus,
+  RuntimeConfig,
+  RuntimeTeamStatus,
+  SendTaskResult,
+  Team,
+} from './types.js';
 
 export { TeamEmitter } from './events.js';
 
 export interface TeamHandle {
   reload(): Promise<void>;
   stop(): Promise<void>;
-  agents(): Agent[];
-  config(): TeamConfig;
+  agents(): RuntimeAgent[];
+  team(): Team;
+  config(): RuntimeConfig;
   sendTask(agentName: string, message: string): SendTaskResult;
-  agentStatus(agentName: string): AgentStatus | undefined;
-  status(): TeamStatus;
+  agentStatus(agentName: string): RuntimeAgentStatus | undefined;
+  status(): RuntimeTeamStatus;
   events: TeamEmitter;
 }
 
 export async function startTeam(rootDir: string): Promise<TeamHandle> {
   const events = new TeamEmitter();
-  let config = readTeamConfig(rootDir);
+  let team = discoverTeam(rootDir);
+  let config = readRuntimeConfig(rootDir);
   const invocations = new InvocationManager(config.maxConcurrentPi, events);
 
   events.on('invocation:start', (e) => logger.info(e.agent, `starting ${e.kind} pi #${e.id}`));
@@ -35,7 +47,7 @@ export async function startTeam(rootDir: string): Promise<TeamHandle> {
   events.on('cron:fired', (e) => logger.info(e.agent, `cron fired: ${e.task}`));
   events.on('task:received', (e) => logger.info(e.agent, `new tasks in inbox`));
   events.on('error', (e) => logger.error(e.agent ?? 'team', e.message));
-  let agents: Agent[] = [];
+  let agents: RuntimeAgent[] = [];
   let watchers = new Map<string, InboxWatcher>();
   let scheduled: RegisteredCron[] = [];
   let reloading = false;
@@ -53,11 +65,13 @@ export async function startTeam(rootDir: string): Promise<TeamHandle> {
     if (reloading || stopped) return;
     reloading = true;
     try {
-      const nextConfig = readTeamConfig(rootDir);
-      const nextAgents = discoverAgents(rootDir);
+      const nextTeam = discoverTeam(rootDir);
+      const nextConfig = readRuntimeConfig(rootDir);
+      const nextAgents = nextTeam.agents.map(toRuntimeAgent);
       const oldAgents = new Set(watchers.keys());
       const oldTasks = new Set(scheduled.map((t) => t.key));
       stopAll();
+      team = nextTeam;
       config = nextConfig;
       invocations.setLimit(config.maxConcurrentPi);
       agents = nextAgents;
@@ -78,7 +92,7 @@ export async function startTeam(rootDir: string): Promise<TeamHandle> {
         for (const a of taskDiff.added) logger.info(`added scheduled task: ${a}`);
         for (const r of taskDiff.removed) logger.warn(`removed scheduled task: ${r}`);
       }
-      logger.info(`Team ${config.name}: ${agents.length} agents, ${scheduled.length} scheduled tasks`);
+      logger.info(`Team ${team.name}: ${agents.length} agents, ${scheduled.length} scheduled tasks`);
       events.emit('reload', { added, removed });
     } finally {
       reloading = false;
@@ -90,7 +104,7 @@ export async function startTeam(rootDir: string): Promise<TeamHandle> {
     stopScheduledTasks(scheduled);
   }
 
-  function buildAgentStatus(agent: Agent): AgentStatus {
+  function buildAgentStatus(agent: RuntimeAgent): RuntimeAgentStatus {
     return {
       name: agent.name,
       pending: countInbox(agent.inboxDir),
@@ -111,19 +125,29 @@ export async function startTeam(rootDir: string): Promise<TeamHandle> {
       await invocations.shutdown();
     },
     agents: () => [...agents],
+    team: () => team,
     config: () => config,
     sendTask(agentName: string, message: string): SendTaskResult {
-      return doSendTask(agentName, message, config.rootDir);
+      return doSendTask(agentName, message, team.rootDir);
     },
-    agentStatus(agentName: string): AgentStatus | undefined {
+    agentStatus(agentName: string): RuntimeAgentStatus | undefined {
       const agent = agents.find((a) => a.name === agentName);
       if (!agent) return undefined;
       return buildAgentStatus(agent);
     },
-    status(): TeamStatus {
-      return { name: config.name, agents: agents.map(buildAgentStatus) };
+    status(): RuntimeTeamStatus {
+      return { name: team.name, agents: agents.map(buildAgentStatus) };
     },
     events,
+  };
+}
+
+function toRuntimeAgent(agent: Agent): RuntimeAgent {
+  return {
+    ...agent,
+    inboxDir: join(agent.dir, 'inbox'),
+    sessionDir: join(agent.dir, '.session'),
+    logsDir: join(agent.dir, '.logs'),
   };
 }
 

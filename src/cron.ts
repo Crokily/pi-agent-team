@@ -3,11 +3,11 @@ import type { TeamEmitter } from './events.js';
 import { Cron } from 'croner';
 import { InvocationManager } from './invoke.js';
 import { errorMessage, logger } from './logger.js';
-import type { Agent, RegisteredCron, TeamConfig } from './types.js';
+import type { RegisteredCron, RuntimeAgent, RuntimeConfig } from './types.js';
 
 export function registerScheduledTasks(
-  agents: Agent[],
-  config: TeamConfig,
+  agents: RuntimeAgent[],
+  config: RuntimeConfig,
   invocations: InvocationManager,
   events: TeamEmitter,
 ): RegisteredCron[] {
@@ -51,4 +51,3 @@ export function registerScheduledTasks(
 export function stopScheduledTasks(tasks: RegisteredCron[]): void {
   for (const task of tasks) task.stop();
 }
-

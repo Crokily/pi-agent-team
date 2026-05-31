@@ -3,25 +3,35 @@ export interface ScheduleEntry {
   cron: string;
   prompt?: string;
 }
-export interface TeamConfig {
+
+export interface Agent {
+  name: string;
+  dir: string;
+}
+
+export interface Team {
   rootDir: string;
   name: string;
+  agents: Agent[];
+}
+
+export interface RuntimeAgent extends Agent {
+  inboxDir: string;
+  sessionDir: string;
+  logsDir: string;
+}
+
+export interface RuntimeConfig {
   defaults: { model?: string; thinking?: string };
   maxConcurrentPi: number;
   piBin: string;
   agentSchedules: Map<string, ScheduleEntry[]>;
 }
-export interface Agent {
-  name: string;
-  dir: string;
-  inboxDir: string;
-  sessionDir: string;
-  logsDir: string;
-}
+
 export type InvocationKind = 'inbox' | 'scheduled';
 export interface InvocationRequest {
-  agent: Agent;
-  config: TeamConfig;
+  agent: RuntimeAgent;
+  config: RuntimeConfig;
   prompt: string;
   kind: InvocationKind;
   taskName?: string;
@@ -34,8 +44,6 @@ export interface InvocationResult {
   stderr: string;
 }
 export interface RegisteredCron { key: string; stop: () => void }
-
-// --- Operation results (consumed by any control surface) ---
 
 export interface InitResult {
   rootDir: string;
@@ -56,7 +64,10 @@ export interface SendTaskResult {
 export interface AgentStatus {
   name: string;
   pending: number;
-  busy?: boolean;
+}
+
+export interface RuntimeAgentStatus extends AgentStatus {
+  busy: boolean;
   schedules: ScheduleEntry[];
 }
 
@@ -65,7 +76,10 @@ export interface TeamStatus {
   agents: AgentStatus[];
 }
 
-// --- Events (emitted by runtime, consumed by any surface) ---
+export interface RuntimeTeamStatus {
+  name: string;
+  agents: RuntimeAgentStatus[];
+}
 
 export interface TeamEventMap {
   'invocation:start': { agent: string; kind: InvocationKind; id: number };

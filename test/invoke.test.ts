@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { InvocationManager } from '../src/invoke.js';
 import { TeamEmitter } from '../src/events.js';
-import type { Agent, TeamConfig, InvocationRequest } from '../src/types.js';
+import type { InvocationRequest, RuntimeAgent, RuntimeConfig } from '../src/types.js';
 
 let tmp: string;
 
-function makeAgent(name: string): Agent {
+function makeAgent(name: string): RuntimeAgent {
   const dir = join(tmp, 'agents', name);
   mkdirSync(join(dir, 'inbox'), { recursive: true });
   return {
@@ -21,13 +21,11 @@ function makeAgent(name: string): Agent {
   };
 }
 
-function makeConfig(sleepSec: number): TeamConfig {
+function makeConfig(sleepSec: number): RuntimeConfig {
   const bin = join(tmp, `stub-${sleepSec}.sh`);
   writeFileSync(bin, `#!/bin/sh\ntrap 'exit 0' TERM\nsleep ${sleepSec} &\nwait\n`);
   chmodSync(bin, 0o755);
   return {
-    rootDir: tmp,
-    name: 'test-team',
     defaults: {},
     maxConcurrentPi: 5,
     piBin: bin,
@@ -61,7 +59,7 @@ describe('InvocationManager', () => {
     });
     events.on('invocation:end', () => { currentActive--; });
 
-    const req = (agent: Agent): InvocationRequest => ({
+    const req = (agent: RuntimeAgent): InvocationRequest => ({
       agent,
       config,
       prompt: 'test',
@@ -91,7 +89,7 @@ describe('InvocationManager', () => {
     events.on('invocation:start', (d) => { timeline.push(`start:${d.agent}:${d.id}`); });
     events.on('invocation:end', (d) => { timeline.push(`end:${d.agent}:${d.id}`); });
 
-    const req = (agent: Agent): InvocationRequest => ({
+    const req = (agent: RuntimeAgent): InvocationRequest => ({
       agent,
       config,
       prompt: 'test',
@@ -136,7 +134,7 @@ describe('InvocationManager', () => {
     let started = false;
     events.on('invocation:start', () => { started = true; });
 
-    const req = (agent: Agent): InvocationRequest => ({
+    const req = (agent: RuntimeAgent): InvocationRequest => ({
       agent,
       config,
       prompt: 'test',

@@ -32,14 +32,14 @@ pi-agent-team makes the opposite bet.
 
 ## The Opposite Bet: No Orchestrator
 
-There is no lead agent here. No task graph, no router, no control-plane deciding who does what. The harness only wakes agents up; everything else lives **inside each agent**.
+There is no lead agent here. No task graph, no router, no control-plane deciding who does what. The runtime only wakes agents up; everything else lives **inside each agent**.
 
 That doesn't mean tasks disappear — they still arrive as files in an agent's `inbox/`, so in the small this convention *is* a task queue like any other. What's deliberately missing is the layer *above* the agents: nobody decomposes a goal and hands out the pieces. Each agent owns a **domain** and decides for itself what the day needs.
 
 So the obvious question: why throw away the orchestrator, when a smart lead is exactly the part everyone else is building? Because that's the wrong place to put the intelligence.
 
 - **It has to be smart about everything.** To route work well, an orchestrator must model every agent's domain — a god-object that understands the whole team. It's the hardest piece to write and the first to break.
-- **It's a single point of failure for judgment.** One bad decomposition or routing decision degrades the entire team. A harness that makes no decisions can make no bad ones.
+- **It's a single point of failure for judgment.** One bad decomposition or routing decision degrades the entire team. A runtime that makes no decisions can make no bad ones.
 - **It freezes intelligence in code while the models keep improving.** Hand-written orchestration logic bakes in today's assumptions, and every model upgrade has to squeeze through that fixed bottleneck. Push the intelligence into the agents — the model plus its directory — and a better model makes every agent better at once, with nothing in the middle gating it.
 - **It couples the whole team to the center.** Adding, removing, or reworking an agent means editing the orchestrator. Here, `mkdir` hires a teammate and `rm` lets one go — nothing central to touch, and different agents can even run on different runtimes.
 - **The leverage isn't in the dispatcher anyway.** What makes an agent good is its own role, skills, tools, and memory — its directory. That's the whole premise of [The Recruitment Problem](#the-recruitment-problem) below: the scaffolding around a fixed model dominates its quality. So invest intelligence *there*, one agent at a time, instead of concentrating it in a planner that sits above them all.
@@ -55,7 +55,7 @@ The result is a team that's never merely as good as its orchestrator — because
 | Infrastructure | Orchestrator, task graph, queues | A directory and a cron line |
 | Metaphor | A build pipeline | An employee |
 
-An agent's AGENTS.md doesn't say "you can do research." It says "you **are** the researcher — check for research requests daily, produce a digest on Mondays, and flag anything critical to the team." When the harness wakes it at 9 AM, it isn't told what to do. It reads its responsibilities, checks its memory, looks at its inbox, and gets to work.
+An agent's AGENTS.md doesn't say "you can do research." It says "you **are** the researcher — check for research requests daily, produce a digest on Mondays, and flag anything critical to the team." When the runtime wakes it at 9 AM, it isn't told what to do. It reads its responsibilities, checks its memory, looks at its inbox, and gets to work.
 
 That's the difference between an agent that *executes tasks* and one that *holds a position*.
 
@@ -63,15 +63,15 @@ That's the difference between an agent that *executes tasks* and one that *holds
 
 ## The "Always On Duty" Model
 
-The harness is a long-running process — like an office that never closes. It watches each agent's inbox for new tasks and fires scheduled jobs via cron. When work appears, PI is spawned to handle it. When PI finishes, the harness checks if there's more work. The agent is effectively always available.
+The autonomous runtime is a long-running process — like an office that never closes. It watches each agent's inbox for new tasks and fires scheduled jobs via cron. When work appears, PI is spawned to handle it. When PI finishes, the runtime checks if there's more work. The agent is effectively always available.
 
 ```
-New task in inbox/ → harness detects it → spawns PI → PI reads AGENTS.md,
-processes tasks, moves completed to .processed/ → PI exits → harness
+New task in inbox/ → runtime detects it → spawns PI → PI reads AGENTS.md,
+processes tasks, moves completed to .processed/ → PI exits → runtime
 re-checks inbox/ → more tasks? spawn PI again → empty? wait for next task
 ```
 
-The harness doesn't inject any protocol. PI reads AGENTS.md automatically from the working directory — all workflow instructions (check inbox, update memory, move to .processed/) are written there. The harness just sets `cwd` and says "you have new tasks."
+The runtime doesn't inject any protocol. PI reads AGENTS.md automatically from the working directory — all workflow instructions (check inbox, update memory, move to .processed/) are written there. The runtime just sets `cwd` and says "you have new tasks."
 
 Session continuity comes from PI's `--session-dir` and `--continue` flags. The agent remembers what it did in previous invocations without any external state management.
 
@@ -106,7 +106,7 @@ This project is deliberately **not** a framework. It's a convention — a set of
 We intentionally leave out:
 
 - **Complex collaboration protocols** — In a real company, when you want collaboration tools, you install Jira or Slack. Same here. Need agents to coordinate? Add a shared Notion database, a task board, an MCP message bus. That's your choice, not ours.
-- **Orchestration logic** — No DAGs, no workflows, no routing. The harness wakes agents up. What they do is their business.
+- **Orchestration logic** — No DAGs, no workflows, no routing. The runtime wakes agents up. What they do is their business.
 - **Management dashboards** — The filesystem *is* the dashboard. `ls agents/` shows your team. `cat agents/researcher/memory/log.md` shows what the researcher did.
 
 Why? Because **the value is in the ideas, not the infrastructure.** A convention that requires a 500-dependency framework to use has failed. A convention that works with just `mkdir` and a cron job has succeeded.
@@ -128,7 +128,7 @@ Creating an agent isn't a single step. It's a lifecycle:
 ```
 1. Design       → Write AGENTS.md, choose skills and tools
 2. Evaluate     → Run test scenarios, measure quality
-3. Iterate      → Adjust role, skills, tools, harness based on eval results
+3. Iterate      → Adjust role, skills, tools, runtime based on eval results
 4. Deploy       → Add schedule entries in team.yaml, let the agent go to work
 5. Monitor      → Ongoing eval, continuous improvement
 ```
@@ -137,7 +137,7 @@ Most agent teams jump from step 1 to step 4. Steps 2 and 3 — the "recruitment"
 
 ### What Makes an Agent "Qualified"?
 
-Research (Stanford/MIT Meta-Harness, 2026) shows that changing just the harness around a fixed model can produce a **6x performance gap**. Agent quality isn't just about the prompt — it's about the entire directory: the role definition, the skills, the tools, the memory strategy, the verification steps.
+Research (Stanford/MIT Meta-Harness, 2026) shows that changing just the scaffolding around a fixed model can produce a **6x performance gap**. Agent quality isn't just about the prompt — it's about the entire directory: the role definition, the skills, the tools, the memory strategy, the verification steps.
 
 This means "iterating on an agent" isn't just prompt engineering. It's adjusting the whole structure:
 
@@ -147,7 +147,7 @@ This means "iterating on an agent" isn't just prompt engineering. It's adjusting
 | Skills | skills/ | What specialized abilities it has |
 | Tools | mcp.json | What external capabilities it can use |
 | Memory strategy | memory/ structure | How it maintains context across shifts |
-| Harness configuration | Convention setup | How the scaffolding supports the agent |
+| Runtime configuration | Convention setup | How the scaffolding supports the agent |
 
 ### Eval as a Primitive
 
@@ -204,13 +204,13 @@ To swap an implementation:
 2. Update AGENTS.md: "check Notion for new tasks" instead of "check inbox/"
 3. Done. The file-based directory isn't needed anymore.
 
-The harness doesn't change. Only the agent's instructions change — because the agent is the one with the intelligence to adapt.
+The runtime doesn't change. Only the agent's instructions change — because the agent is the one with the intelligence to adapt.
 
 ---
 
-## The Harness Is Dumb
+## The Runtime Is Minimal
 
-The harness — the long-running process that keeps agents working — is intentionally minimal. It does exactly two things:
+The autonomous runtime — the long-running process that keeps agents working — is intentionally minimal. It does exactly two things:
 
 1. Watches each agent's `inbox/` for new tasks — when one appears and the agent is idle, spawns PI
 2. Reads schedule config from team.yaml and fires PI when cron expressions match
@@ -219,7 +219,7 @@ It doesn't understand what agents do. It doesn't manage state. It doesn't route 
 
 **Intelligence lives in the agents, not the infrastructure.**
 
-This means the harness is a few hundred lines of code. It means the convention works even without it — you can manually `cd agents/researcher && pi -p "you have new tasks"` and everything works.
+This means the runtime is a few hundred lines of code. It means the convention works even without it — you can manually `cd agents/researcher && pi -p "you have new tasks"` and everything works.
 
 ---
 
@@ -278,7 +278,7 @@ cd my-team
 pi-team add researcher        # creates directory + template AGENTS.md
 # edit agents/researcher/AGENTS.md to define the role
 pi-team send researcher "Research the Flue Framework"
-pi-team start                 # start the harness — watches inboxes + fires crons
+pi-team start                 # start the autonomous runtime — watches inboxes + fires crons
 ```
 
 ### By hand (the convention is just directories)
@@ -313,7 +313,7 @@ echo "name: my-team" > my-team/team.yaml
 echo "Research the Flue Framework — focus on performance and production readiness." \
   > my-team/agents/researcher/inbox/1748422200_research-flue.md
 
-# Run manually (or let the harness do it)
+# Run manually (or let the autonomous runtime do it)
 cd my-team/agents/researcher
 pi -p "you have new tasks"
 ```
@@ -329,7 +329,7 @@ For the full convention, see [CONVENTION.md](./CONVENTION.md).
 ├── README.md              # This file — the ideas behind the project
 ├── skill/                 # PI skill for managing teams from inside PI
 │   └── SKILL.md
-├── src/                   # The harness — runtime that makes teams work
+├── src/                   # The autonomous runtime — makes teams self-operating
 │   ├── index.ts           # CLI entry point (pi-team command)
 │   ├── runtime.ts         # Team engine: startTeam() → TeamHandle
 │   ├── commands.ts        # Operations: init, add, send, status (returns data)
@@ -346,12 +346,14 @@ For the full convention, see [CONVENTION.md](./CONVENTION.md).
     └── hr-agent/          # Template for an HR agent (agent quality manager)
 ```
 
-The harness is designed for multiple control surfaces. The CLI (`pi-team`) is one; a website, Notion console, or PI skill can use the same operations layer:
+The project is designed for multiple control surfaces. The CLI (`pi-team`) is one; a website, Notion console, or PI skill can use the same operations layer:
 
 ```ts
-// Programmatic usage — e.g. from a web dashboard
-import { startTeam } from 'pi-agent-team';
-import { init, addAgent } from 'pi-agent-team/commands';
+// Operations — any control surface can use these
+import { init, addAgent, sendTask } from 'pi-agent-team';
+
+// Autonomous runtime — optional, adds self-running capability
+import { startTeam } from 'pi-agent-team/runtime';
 
 const handle = await startTeam('/path/to/team');
 handle.sendTask('researcher', 'investigate Flue Framework');
@@ -362,7 +364,7 @@ handle.events.on('invocation:end', (e) => { /* push to dashboard */ });
 
 ## What This Is Not
 
-- **Not a framework.** The convention is just directories and ideas. The harness (`pi-team`) provides a CLI and programmatic API, but the convention works without it.
+- **Not a framework.** The convention is just directories and ideas. The autonomous runtime (`pi-team`) provides a CLI and programmatic API, but the convention works without it.
 - **Not a product.** No hosted service, no pricing page. It's an idea with templates.
 - **Not opinionated about tools.** Use Notion, Linear, Slack, custom MCPs — the convention doesn't care.
 - **Not locked to PI.** The ideas apply to any agent that can read files and follow instructions. PI is the natural fit because of its directory-based configuration, but the convention is agent-runtime-agnostic.
